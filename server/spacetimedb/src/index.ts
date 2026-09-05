@@ -1296,6 +1296,10 @@ function stepModerate(ctx: any, load: any, arg: any) {
   ctx.withTx((tx: Tx) => {
     const qq = tx.db.question.id.find(q.id);
     if (!qq || qq.round !== arg.round || qq.state !== 'moderating') return;
+    // Notes the chair read while building version one count as consumed, and the humans get named for it.
+    const read = takeNotes(tx.db, q.id, 'moderate', qq.round).filter(n => n.teamQuestionId === 0n);
+    const authors = [...new Set(read.map(n => n.authorName))];
+    const credit = authors.length ? `, with notes from ${authors.join(', ')} taken into account` : '';
     cleaned.forEach((p: any, i: number) => {
       const src = drafts.find((d: any) => p.from.includes(d.label)) ?? drafts[0];
       tx.db.paragraph.insert({
@@ -1305,9 +1309,9 @@ function stepModerate(ctx: any, load: any, arg: any) {
         version: 1,
         text: p.text,
         status: 'agreed',
-        causeType: 'draft',
-        causeId: src ? src.id : 0n,
-        why: `Version one, assembled by the chair from draft${p.from.length === 1 ? '' : 's'} ${p.from.join(', ') || 'A'}`,
+        causeType: authors.length ? 'note' : 'draft',
+        causeId: authors.length ? read[0].id : src ? src.id : 0n,
+        why: `Version one, assembled by the chair from draft${p.from.length === 1 ? '' : 's'} ${p.from.join(', ') || 'A'}${credit}`,
         createdAt: tx.timestamp,
         current: true,
       });
@@ -1572,7 +1576,7 @@ function stepSynthesize(ctx: any, load: any, arg: any) {
     required: ['edits', 'addressed_objections', 'overruled_objections', 'summary'],
     additionalProperties: false,
   };
-  const user = `${briefBlock(r, q)}\n${answerBlock(paras)}\n<ledger_open>\n${open.map((o: any) => `objection id=${o.id} [para ${o.targetOrdinal}] claim: "${o.claim}" issue: ${o.issue}`).join('\n') || '(empty)'}\n</ledger_open>\n<evidence>\n${ev.map((e: any) => `evidence id=${e.id} [para ${e.targetOrdinal}] ${e.verdict.toUpperCase()}: "${e.claim}" source: ${e.url} quote: "${e.excerpt}"`).join('\n') || '(none)'}\n</evidence>\n<overruled>\n${overruled.map((o: any) => `objection ${o.id} was overruled: ${o.resolution}`).join('\n') || '(none)'}\n</overruled>\n<team_notes_new>\n${[...fresh, ...answered.map((t: any) => ({ id: t.id, authorName: t.answeredByName, text: `answered "${t.text}": ${t.answer}`, isAnswer: true }))].map((n: any) => `note id=${n.id}${n.isAnswer ? ' (answer to the room)' : ''} from ${n.authorName}: ${n.text}`).join('\n') || '(none)'}\n</team_notes_new>\n\nYou are the chair. Rebuild the answer. Every edit must cite exactly one cause from the ledger, the evidence, or the new team notes, by its id. Rewrite a paragraph to fix what an objection or a refuting source showed. Add a paragraph only for something a team note or evidence introduced. Remove a paragraph only when evidence refutes it outright. An edit with no real cause will be thrown away, so do not pad. Then handle every open objection, leaving none untouched: list the ones you addressed with an edit and how, and overrule the rest with a one-line reason why the objection is wrong or does not change the answer. An objection you neither address nor overrule stays open against you. Keep paragraphs short, one point each, and keep the whole answer under 400 words. Summary: one line on what changed.`;
+  const user = `${briefBlock(r, q)}\n${answerBlock(paras)}\n<ledger_open>\n${open.map((o: any) => `objection id=${o.id} [para ${o.targetOrdinal}] claim: "${o.claim}" issue: ${o.issue}`).join('\n') || '(empty)'}\n</ledger_open>\n<evidence>\n${ev.map((e: any) => `evidence id=${e.id} [para ${e.targetOrdinal}] ${e.verdict.toUpperCase()}: "${e.claim}" source: ${e.url} quote: "${e.excerpt}"`).join('\n') || '(none)'}\n</evidence>\n<overruled>\n${overruled.map((o: any) => `objection ${o.id} was overruled: ${o.resolution}`).join('\n') || '(none)'}\n</overruled>\n<team_notes_new>\n${[...fresh, ...answered.map((t: any) => ({ id: t.id, authorName: t.answeredByName, text: `answered "${t.text}": ${t.answer}`, isAnswer: true }))].map((n: any) => `note id=${n.id}${n.isAnswer ? ' (answer to the room)' : ''} from ${n.authorName}: ${n.text}`).join('\n') || '(none)'}\n</team_notes_new>\n\nYou are the chair. Rebuild the answer. Every edit must cite exactly one cause from the ledger, the evidence, or the new team notes, by its id. When a team note changed a paragraph, cite the note as the cause even if an objection also applies: the humans in the room must be able to see that their note landed. Rewrite a paragraph to fix what an objection or a refuting source showed. Add a paragraph only for something a team note or evidence introduced. Remove a paragraph only when evidence refutes it outright. An edit with no real cause will be thrown away, so do not pad. Then handle every open objection, leaving none untouched: list the ones you addressed with an edit and how, and overrule the rest with a one-line reason why the objection is wrong or does not change the answer. An objection you neither address nor overrule stays open against you. Keep paragraphs short, one point each, and keep the whole answer under 400 words. Summary: one line on what changed.`;
   const res = callModel(ctx, slotRow, prov, HOUSE + '\nYou are the chair. You change nothing without a cause you can point to.', user, schema, 1800, 0, 75_000);
   ctx.withTx((tx: Tx) => noteCall(tx, q.id, q.roomId));
   if (!res.ok) return failStep(ctx, arg, load, res.error);
