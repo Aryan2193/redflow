@@ -61,3 +61,6 @@
 - Maincloud reducer round-trip 3s (an earlier 60s CLI timeout was a blip). Demo room 42YU running q2.
 - GitHub Pages repo NOT created yet (Aryan has not run the two commands). Staging refreshed at C:/Users/aryan/redflow-web.
 - vercel CLI installed globally (no login yet) so a domain deploy is one login + one command.
+
+## 19:40 stranger test (isolated browser context, no saved name/token, Maincloud)
+- Home -> open room: 521ms to /r/AWCJ. Room tab opened by default. Ask visible in 274ms. Agents visible immediately. Member online on server.
