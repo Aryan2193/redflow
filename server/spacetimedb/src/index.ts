@@ -826,10 +826,14 @@ function int(v: any, lo: number, hi: number, fallback: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 type Section = { heading: string; body: string };
+// Models echo the "[section 3] (agreed)" markers from their input into headings. Strip them.
+function cleanHeading(h: string) {
+  return h.replace(/^\s*\[?\s*section\s*\d+\s*\]?\s*(\([a-z ]+\))?\s*[:.-]?\s*/i, '').replace(/^#+\s*/, '').trim();
+}
 function sections(v: any, maxItems = 7): Section[] {
   if (!Array.isArray(v)) return [];
   return v
-    .map(s => ({ heading: str(s?.heading, 90), body: str(s?.body ?? s?.text, 3000) }))
+    .map(s => ({ heading: cleanHeading(str(s?.heading, 90)), body: str(s?.body ?? s?.text, 3000) }))
     .filter(s => s.body.length > 0)
     .slice(0, maxItems);
 }
@@ -1451,7 +1455,7 @@ Summary: one line on what changed and why.`;
         continue;
       }
       const action = str(e?.action, 10);
-      const heading = str(e?.heading, 90);
+      const heading = cleanHeading(str(e?.heading, 90));
       const body = str(e?.body, 3000);
       const why = str(e?.why, 300, 'Revised by the lead');
       const ordinal = int(e?.ordinal, 0, 999, 0);

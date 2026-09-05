@@ -212,7 +212,7 @@ export default function Answer(p: Props) {
               <section key={para.id.toString()} className={`rounded-md ${fresh ? 'landed' : ''}`}>
                 <div className="flex items-baseline gap-3">
                   <span className={`mt-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT[status] ?? 'bg-judg'}`} title={STATUS_HELP[status]} aria-hidden />
-                  <h2 className="font-display text-[1.35rem] font-medium leading-snug">{para.heading || `Section ${para.ordinal}`}</h2>
+                  <h2 className="font-display text-[1.35rem] font-medium leading-snug">{para.heading.replace(/^\s*\[?\s*section\s*\d+\s*\]?\s*(\([a-z ]+\))?\s*[:.-]?\s*/i, '') || `Section ${para.ordinal}`}</h2>
                   <button onClick={() => setOpen(isOpen ? null : para.id)} className={`ml-auto shrink-0 text-xs font-semibold uppercase tracking-wider ${STATUS_TEXT[status] ?? 'text-judg'}`} title="Why this section reads the way it does">
                     {STATUS_LABEL[status] ?? status}
                     {view === 'after' && para.version > 1 ? ` · v${para.version}` : ''}
