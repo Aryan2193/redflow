@@ -39,7 +39,7 @@ const STATUS_BAR: Record<string, string> = {
   unresolved: 'bg-red',
 };
 
-export function stateLine(q: Question, statuses: readonly AgentStatus[], slots: readonly ModelSlot[]): string {
+export function stateLine(q: Question, statuses: readonly AgentStatus[], slots: readonly ModelSlot[], unresolved = 0): string {
   const label = (slot: string) => slots.find(s => s.slot === slot)?.label ?? slot;
   const active = statuses.filter(s => !['idle', 'done', 'failed'].includes(s.state));
   switch (q.state) {
@@ -60,7 +60,7 @@ export function stateLine(q: Question, statuses: readonly AgentStatus[], slots: 
     case 'verifying':
       return 'Critics are checking whether the fixes hold';
     case 'settled':
-      return q.openObjections > 0 ? `Settled with ${q.openObjections} unresolved` : 'Settled. Every objection was resolved';
+      return unresolved > 0 ? `Settled with ${unresolved} unresolved risk${unresolved === 1 ? '' : 's'}` : 'Settled. Every objection was resolved';
     case 'failed':
       return 'The room hit a problem';
     default:
@@ -118,9 +118,9 @@ export default function Answer(p: Props) {
       <h2 className="font-display mt-1 text-2xl leading-snug">{q.text}</h2>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 ${busy ? 'border-line bg-sheet text-ink-2' : q.openObjections ? STATUS_CLASS.unresolved : STATUS_CLASS.verified}`}>
+        <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 ${busy ? 'border-line bg-sheet text-ink-2' : unresolved.length ? STATUS_CLASS.unresolved : STATUS_CLASS.verified}`}>
           {busy && <span className="pulse inline-block h-1.5 w-1.5 rounded-full bg-red" aria-hidden />}
-          {stateLine(q, p.statuses, p.slots)}
+          {stateLine(q, p.statuses, p.slots, unresolved.length)}
         </span>
         {q.version > 0 && <span className="text-muted">version {q.version}</span>}
         {q.lastError && !q.lastError.includes('retrying') && q.state !== 'settled' && (
