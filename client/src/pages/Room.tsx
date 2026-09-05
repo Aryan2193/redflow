@@ -44,14 +44,15 @@ export default function Room({ code }: { code: string }) {
   const [joinError, setJoinError] = useState('');
   const triedAutoJoin = useRef(false);
 
-  // Returning visitor with a remembered name walks straight in.
+  // Returning visitor with a remembered name walks straight in. A member who reloaded is marked present again.
   useEffect(() => {
-    if (!room || !identity || myMember || triedAutoJoin.current) return;
-    const n = savedName();
-    if (!n) return;
+    if (!room || !identity || !isActive) return;
+    if (myMember && myMember.online) return;
+    const n = myMember?.name || savedName();
+    if (!n || triedAutoJoin.current) return;
     triedAutoJoin.current = true;
     joinRoom({ code, name: n }).catch(err => setJoinError(String((err as Error)?.message ?? err)));
-  }, [room, identity, myMember, code, joinRoom]);
+  }, [room, identity, isActive, myMember, code, joinRoom]);
 
   const [tab, setTab] = useState<'answer' | 'room'>('answer');
   const [now, setNow] = useState(Date.now());
