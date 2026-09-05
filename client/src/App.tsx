@@ -24,14 +24,17 @@ class Boundary extends Component<{ children: ReactNode }, { error: Error | null 
   }
 }
 
+// Works at the domain root and under a base path such as /redflow-web/ on GitHub Pages.
+const BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+
 function parsePath(path: string): { page: 'home' } | { page: 'room'; code: string } {
-  const m = path.match(/^\/r\/([A-Za-z0-9]{4,8})\/?$/);
+  const m = path.match(/\/r\/([A-Za-z0-9]{4,8})\/?$/);
   if (m) return { page: 'room', code: m[1].toUpperCase() };
   return { page: 'home' };
 }
 
 export function navigate(path: string) {
-  window.history.pushState({}, '', path);
+  window.history.pushState({}, '', BASE + (path === '/' ? '/' : path));
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
