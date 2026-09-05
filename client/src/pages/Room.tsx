@@ -66,7 +66,8 @@ export default function Room({ code }: { code: string }) {
     if (questions.length === 0) setTab('room');
   }, [enabled, questionsLoaded, questions.length]);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    // Five seconds is enough for "2m ago" labels and the nine-second diff highlight. One second re-rendered everything constantly.
+    const t = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(t);
   }, []);
 
