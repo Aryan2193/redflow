@@ -55,25 +55,42 @@ function CornerHeader({ corner, slots, statuses }: { corner: Corner; slots: read
 function Column(props: { items: BoutItem[]; ctx: CardCtx; isOpen: (k: string) => boolean; toggle: (k: string) => void; tint: string; className?: string; footer?: ReactNode; lean?: boolean }) {
   const { items, ctx, isOpen, toggle, tint, className = '', footer, lean } = props;
   const ref = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const footRef = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
   const sig = items.map(i => i.key).join('|') + (footer ? '|f' : '');
+  // Follow the fight: newest card at the bottom, or the decision from its headline. Fonts, markdown and the ring
+  // widening all reflow the column after the data lands, so re-align on every content resize until the reader
+  // scrolls away on purpose.
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    // Follow the fight to the bottom; when the decision lands, show it from its headline. The ring widens for the
-    // decision over 600ms, which reflows the card, so align once more after the columns have settled.
+    const inner = innerRef.current;
+    if (!el || !inner) return;
     const align = () => {
+      if (!stick.current) return;
       if (footRef.current) el.scrollTop = Math.max(0, footRef.current.offsetTop - 8);
       else el.scrollTop = el.scrollHeight;
     };
+    stick.current = true;
     align();
-    const t = setTimeout(align, 700);
-    return () => clearTimeout(t);
+    const ro = new ResizeObserver(() => align());
+    ro.observe(inner);
+    const t = setTimeout(align, 750);
+    return () => {
+      ro.disconnect();
+      clearTimeout(t);
+    };
   }, [sig]);
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el) return;
+    const target = footRef.current ? Math.max(0, footRef.current.offsetTop - 8) : el.scrollHeight - el.clientHeight;
+    stick.current = Math.abs(el.scrollTop - target) < 48;
+  };
   const side = (c: Corner) => (!lean ? 'w-full' : c === 'left' ? 'w-[92%] self-start' : c === 'right' ? 'w-[92%] self-end' : 'w-full');
   return (
-    <div ref={ref} className={`relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden rounded-xl ${className}`} style={{ background: tint }}>
-      <div className="flex min-h-full flex-col justify-end gap-2 p-2">
+    <div ref={ref} onScroll={onScroll} className={`relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden rounded-xl ${className}`} style={{ background: tint }}>
+      <div ref={innerRef} className="flex min-h-full flex-col justify-end gap-2 p-2">
         {items.map(it => (
           <div key={it.key} className={side(it.corner)}>
             <ItemCard item={it} ctx={ctx} expanded={isOpen(it.key)} onToggle={() => toggle(it.key)} />
