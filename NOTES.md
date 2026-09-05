@@ -72,3 +72,6 @@
 - Team questions persist until answered (even after settle). Latest version summary shown under the status pill with highlight. Answer tab marker when a version lands while on Room tab.
 - Earlier questions in a room selectable from a dropdown.
 - Verified in isolated browser: one-step open 581ms, textarea grows, page scroll 0.
+
+## 20:27
+- Stable test build served by vite preview on :4173 (LAN http://10.155.96.27:4173, Maincloud). Dev server :5173 reloads on every edit; do not hand :5173 to testers.
