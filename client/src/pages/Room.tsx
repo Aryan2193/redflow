@@ -56,6 +56,7 @@ export default function Room({ code }: { code: string }) {
 
   const [tab, setTab] = useState<'answer' | 'room'>('answer');
   const [copied, setCopied] = useState(false);
+  const [explain, setExplain] = useState(false);
   const [now, setNow] = useState(Date.now());
   // A room with no question yet opens on the composer, so a first-time visitor sees what to do.
   const steeredOnce = useRef(false);
@@ -165,7 +166,22 @@ export default function Room({ code }: { code: string }) {
             At the table: {orderedSlots.filter(s => s.slot.startsWith('council')).map(s => s.label).join(', ')}
             {orderedSlots.find(s => s.slot === 'chair') ? `, chaired by ${orderedSlots.find(s => s.slot === 'chair')!.label}` : ''}
           </span>
+          <button onClick={() => setExplain(v => !v)} className="ml-auto whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-ink-2">
+            {explain ? 'Close' : 'How this works'}
+          </button>
         </div>
+        {explain && (
+          <div className="border-t border-line-2 bg-sheet px-4 py-3 text-sm text-ink-2">
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>Someone asks one question. Three models from three labs answer it blind.</li>
+              <li>The chair builds version one and asks the team what only they can know.</li>
+              <li>Critics attack the drafts and the answer, anonymously. Checkable claims go to the web.</li>
+              <li>The chair rebuilds the answer. Every edit must cite an objection, a source, or a teammate's note, or the system refuses it.</li>
+              <li>Critics confirm their objections were fixed, or hold. Anything still standing shows as an unresolved risk.</li>
+            </ol>
+            <p className="mt-2">Type at any time. The agents read your notes on their next turn, and the paragraph you changed carries your name.</p>
+          </div>
+        )}
         <div className="flex border-t border-line-2 md:hidden">
           {(['answer', 'room'] as const).map(t => (
             <button
