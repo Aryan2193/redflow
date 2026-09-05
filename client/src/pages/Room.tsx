@@ -55,6 +55,7 @@ export default function Room({ code }: { code: string }) {
   }, [room, identity, isActive, myMember, code, joinRoom]);
 
   const [tab, setTab] = useState<'answer' | 'room'>('answer');
+  const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(Date.now());
   // A room with no question yet opens on the composer, so a first-time visitor sees what to do.
   const steeredOnce = useRef(false);
@@ -141,12 +142,18 @@ export default function Room({ code }: { code: string }) {
           </div>
           <button
             onClick={() => {
-              navigator.clipboard?.writeText(window.location.href).catch(() => {});
+              navigator.clipboard
+                ?.writeText(window.location.href)
+                .then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1800);
+                })
+                .catch(() => {});
             }}
             className="rounded-md border border-line bg-sheet px-2.5 py-1 font-mono text-sm tracking-[0.2em]"
             title="Copy the room link"
           >
-            {room.code}
+            {copied ? <span className="font-sans tracking-normal text-ok">Link copied</span> : room.code}
           </button>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 text-xs text-muted">

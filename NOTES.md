@@ -51,3 +51,8 @@
 - Cost: 5 full questions + probes = $0.27 total (~5c/question). $18.46 left.
 - Overrule path verified (local q4: 4 withdrawn, 5 overruled, 0 unresolved, settled ~2 min).
 - Public URL blocked on Aryan: GitHub Pages fallback staged at C:/Users/aryan/redflow-web (needs `gh repo create --public` + pages API, classifier blocks me); or domain deploy once DNS host known.
+
+## 19:05
+- Steering verified: note posted during drafting is consumed at moderate (v1 why credits the author, causeType note) and chair cites notes as causes at synthesize. q5 settled in 68s.
+- go_deeper verified (round 2 settled, ledger empty).
+- Checkpoint 3 brief delivered to Aryan in chat. Still waiting: publish decision (domain vs GitHub Pages), email sender.
