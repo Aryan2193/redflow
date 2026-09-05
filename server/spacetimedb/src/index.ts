@@ -1326,6 +1326,8 @@ function stepCritique(ctx: any, load: any, arg: any, dissent = false) {
 Return at most two objections, each with a concrete fix, severity, and whether it is checkable. If after honest effort you cannot find a reason the team would act differently, return an empty list. Do not invent one.`
     : `Attack this answer on substance, as the most demanding expert in this field would. Compare it against your own draft and the other blind draft: where they disagree with the answer, decide who is right and object only where the answer is.
 
+Voice: this is a live bout in front of the team, and the lead will answer you by name. Address the lead directly. Open each issue with one short sentence that lands the blow ("You say X. It is wrong: Y."), then the proof in two or three short sentences. No "it might be worth", no "consider", no compliments before the hit. Sharp is not rude: attack the claim, never the model.
+
 Look for, in this order:
 1. Wrong or outdated facts, numbers, prices, versions, names, or laws. Say what is actually true, with the date.
 2. A recommendation this team should not follow given <room_brief> and <team_notes>.
@@ -1548,11 +1550,13 @@ Rules for edits:
 - One edit per section. If several causes hit one section, rewrite it once, cite the most severe cause, and list every objection you handled in addressed_objections.
 - rewrite gives the full new heading and body. add is only for something a note or evidence introduced that fits nowhere. remove only what evidence refuted outright or what a note made irrelevant.
 - The revised document must read as one piece by one author: a consistent recommendation, no "as a critic noted", no reference to the debate, no new caveats, no softened verbs. Keep the voice specific and committed. 450 to 900 words overall.
+- Section one stays the verdict: at most four sentences and under 90 words, carrying the decision by itself. If you rewrite it, keep it that tight and put the detail in later sections.
 - If the ledger shows your recommendation was wrong, change it plainly in section one and say what changed your mind. Do not defend it.
 
 why (per edit): up to 20 plain words for the team on what changed and the reason, for example "Price corrected to $79 a month from the vendor's page" or "Added the tax step Priya raised".
-how (per addressed objection): one sentence naming the exact change that answers it.
-summary: one sentence for the team on what changed in this version and why, in plain words, no ids.`;
+how (per addressed objection): your comeback, one sentence spoken to the critic by name, conceding exactly what you changed, for example "Conceded, Perplexity: the price was stale, section 2 now says $79 a month with the vendor's page linked."
+reason (per overruled objection): your comeback, one sentence spoken to the critic by name, saying why the objection fails, for example "Overruled, GPT-5.2: your source describes the enterprise tier, the team is on the free plan."
+summary: one sentence for the team, in the voice of someone defending their work in a bout: what you conceded, what you refused, and whether the recommendation stands. Plain words, no ids.`;
   const res = callModel(
     ctx,
     slotRow,
@@ -1692,7 +1696,7 @@ function stepVerify(ctx: any, load: any, arg: any) {
 withdraw when the section now states the correct fact, includes the missing option, step, or risk in a way that would change what the team does, or otherwise fixes the substance the objection pointed at. Judge the objection on its merits: if it was weak and the lead's change handles it adequately, withdraw.
 hold when the change is cosmetic, a caveat or hedge was added instead of a fix, the disputed claim was deleted but the recommendation still depends on it, the fix introduced a new error, or the lead says it addressed the point but the text did not change.
 
-reason: one sentence. For withdraw, quote the words in the revised answer that fix it. For hold, name exactly what is still wrong or missing. No withdrawal without a reason; a missing reason counts as hold.
+reason: one sentence, in the voice of a referee calling it for the room. For withdraw, quote the words in the revised answer that fix it ("Landed: section 2 now says ..."). For hold, name exactly what is still wrong or missing ("Not fixed: the claim was deleted but section 1 still depends on it"). No withdrawal without a reason; a missing reason counts as hold.
 Do not withdraw because the lead sounds confident. Do not hold over wording.`;
   const res = callModel(
     ctx,

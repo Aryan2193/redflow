@@ -7,7 +7,8 @@ import type { Evidence, ModelSlot, Note, Objection, Paragraph, Question, Room } 
 import { toDate } from '../lib/stdb';
 import { renderShareCard, shareOrDownload } from '../lib/shareCard';
 import { STATUS_DOT, STATUS_HELP, STATUS_LABEL, STATUS_TEXT } from '../lib/labels';
-import { cleanWhy, unquote } from './Thread';
+import { cleanWhy, unquote } from '../lib/bout';
+import Stamp from './Stamp';
 
 type Props = {
   room: Room;
@@ -116,7 +117,9 @@ export default function Verdict(p: Props) {
     <div className="pt-2">
       <section className="rounded-2xl bg-ink px-5 py-5 text-paper sm:px-7 sm:py-6">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-wider text-paper/60">
-          <span className="inline-block h-2 w-2 rounded-full bg-red" aria-hidden />
+          <Stamp tone="ink" live={p.now - toDate(q.settledAt ?? q.updatedAt).getTime() < 8000} className="stamp-on-ink mr-1">
+            {open.length ? 'Decision, with risks' : q.state === 'failed' ? 'Stopped' : 'Decision'}
+          </Stamp>
           <span>The room's answer</span>
           <span>· version {q.version}</span>
           {took > 0 && <span>· settled in {duration(took)}</span>}

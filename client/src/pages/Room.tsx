@@ -1,42 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { reducers, tables } from '../module_bindings';
-import type { ModelSlot, Note, Question, Room as RoomRow, TeamQuestion } from '../module_bindings/types';
+import type { Question, TeamQuestion } from '../module_bindings/types';
 import { idHex, rememberName, savedName, toDate } from '../lib/stdb';
-import { narrative, slotColor } from '../lib/labels';
-import Thread from '../components/Thread';
+import Arena from '../components/Arena';
 import Composer from '../components/Composer';
+import RoundBar from '../components/RoundBar';
 import { navigate } from '../App';
-
-const ACTIVE = new Set(['reading', 'drafting', 'critiquing', 'checking', 'synthesizing', 'verifying', 'dissenting']);
-
-// An earlier question in the room: subscribes to its own rows and renders folded to its verdict.
-function PastThread(p: { room: RoomRow; question: Question; notes: readonly Note[]; teamQs: readonly TeamQuestion[]; slots: readonly ModelSlot[]; now: number; myName: string }) {
-  const qid = p.question.id;
-  const [paragraphs] = useTable(tables.paragraph.where(r => r.questionId.eq(qid)));
-  const [objections] = useTable(tables.objection.where(r => r.questionId.eq(qid)));
-  const [evidence] = useTable(tables.evidence.where(r => r.questionId.eq(qid)));
-  const [drafts] = useTable(tables.draft.where(r => r.questionId.eq(qid)));
-  const [versions] = useTable(tables.answerVersion.where(r => r.questionId.eq(qid)));
-  return (
-    <Thread
-      room={p.room}
-      question={p.question}
-      notes={p.notes.filter(n => n.questionId === qid)}
-      teamQs={p.teamQs.filter(t => t.questionId === qid)}
-      drafts={drafts}
-      objections={objections}
-      evidence={evidence}
-      paragraphs={paragraphs}
-      versions={versions}
-      statuses={[]}
-      slots={p.slots}
-      now={p.now}
-      myName={p.myName}
-      collapsed
-    />
-  );
-}
 
 export default function Room({ code }: { code: string }) {
   const { identity, isActive } = useSpacetimeDB();
@@ -54,8 +24,13 @@ export default function Room({ code }: { code: string }) {
   const [slots] = useTable(tables.modelSlot);
 
   const ordered = useMemo(() => [...questions].sort((a, b) => Number(a.id - b.id)), [questions]);
-  const question: Question | undefined = ordered[ordered.length - 1];
-  const past = ordered.slice(0, -1);
+  const latest: Question | undefined = ordered[ordered.length - 1];
+  const [viewQid, setViewQid] = useState<bigint | null>(null);
+  const latestId = latest?.id ?? 0n;
+  useEffect(() => {
+    setViewQid(null);
+  }, [latestId]);
+  const question: Question | undefined = (viewQid !== null ? ordered.find(x => x.id === viewQid) : undefined) ?? latest;
   const qid = question?.id ?? 0n;
   const qEnabled = !!question;
 
@@ -89,21 +64,6 @@ export default function Room({ code }: { code: string }) {
     const t = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(t);
   }, []);
-
-  // Follow the conversation only when the reader is already at the bottom, or just sent something.
-  const listRef = useRef<HTMLDivElement>(null);
-  const nearBottom = useRef(true);
-  const forceScroll = useRef(false);
-  const activeCount = statuses.filter(s => ACTIVE.has(s.state)).length;
-  const signature = `${questions.length}|${notes.length}|${teamQs.length}|${drafts.length}|${objections.length}|${evidence.length}|${versions.length}|${activeCount}|${question?.state ?? ''}|${paragraphs.length}`;
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    if (nearBottom.current || forceScroll.current) {
-      el.scrollTop = el.scrollHeight;
-      forceScroll.current = false;
-    }
-  }, [signature]);
 
   const table = useMemo(() => {
     const order = ['council_a', 'council_b', 'council_c'];
@@ -165,12 +125,36 @@ export default function Room({ code }: { code: string }) {
   return (
     <div className="flex h-dvh flex-col">
       <header className="shrink-0 border-b border-line bg-paper">
-        <div className="mx-auto flex max-w-[760px] items-center gap-3 px-3 py-2.5 sm:px-4">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2" aria-label="Redflow home">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 sm:px-5">
+          <button onClick={() => navigate('/')} className="flex shrink-0 items-center gap-2" aria-label="Redflow home">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-red" aria-hidden />
             <span className="text-sm font-semibold">Redflow</span>
           </button>
           <div className="min-w-0 flex-1 truncate text-sm text-ink-2">{room.title}</div>
+          {ordered.length > 1 && (
+            <select
+              value={(question?.id ?? 0n).toString()}
+              onChange={e => {
+                const id = BigInt(e.target.value);
+                setViewQid(id === latestId ? null : id);
+              }}
+              className="order-last min-w-0 basis-full rounded-md border border-line bg-sheet px-2 py-1 text-xs text-ink sm:order-none sm:max-w-xs sm:basis-auto"
+              aria-label="Which bout to show"
+            >
+              {ordered.map((x, i) => (
+                <option key={x.id.toString()} value={x.id.toString()}>
+                  Bout {i + 1}: {x.text.slice(0, 48)}
+                  {x.text.length > 48 ? '...' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="hidden whitespace-nowrap text-xs text-muted sm:inline">
+            {online.length} here{online.length !== members.length ? `, ${members.length} joined` : ''}
+          </span>
+          <button onClick={() => setExplain(v => !v)} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-xs text-ink-2" aria-label="How this works">
+            {explain ? 'Close' : <><span className="sm:hidden">How</span><span className="hidden sm:inline">How this works</span></>}
+          </button>
           <button
             onClick={() => {
               navigator.clipboard
@@ -181,101 +165,65 @@ export default function Room({ code }: { code: string }) {
                 })
                 .catch(() => {});
             }}
-            className="rounded-md border border-line bg-sheet px-2.5 py-1 font-mono text-sm tracking-[0.2em]"
+            className="shrink-0 rounded-md border border-line bg-sheet px-2.5 py-1 font-mono text-sm tracking-[0.2em]"
             title="Copy the room link"
           >
             {copied ? <span className="font-sans tracking-normal text-ok">Link copied</span> : room.code}
           </button>
         </div>
-        <div className="mx-auto flex max-w-[760px] items-center gap-3 overflow-x-auto px-3 pb-2 text-xs text-muted sm:px-4">
-          <span className="whitespace-nowrap">
-            {online.length} here{online.length !== members.length ? `, ${members.length} joined` : ''}
-          </span>
-          <span className="flex items-center gap-1.5 whitespace-nowrap">
-            {table.map((s, i) => (
-              <span key={s.slot} className="inline-flex items-center gap-1">
-                {i > 0 && <span className="mr-0.5 text-muted/70">vs</span>}
-                <span className={`inline-block h-2 w-2 rounded-full ${slotColor(s.slot)}`} aria-hidden />
-                {s.label}
-              </span>
-            ))}
-          </span>
-          {question && <span className="hidden truncate sm:inline">· {narrative(question, statuses, slots, openRisks)}</span>}
-          <button onClick={() => setExplain(v => !v)} className="ml-auto whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-ink-2">
-            {explain ? 'Close' : 'How this works'}
-          </button>
-        </div>
         {explain && (
           <div className="border-t border-line-2 bg-sheet">
-            <div className="mx-auto max-w-[760px] px-3 py-3 text-sm text-ink-2 sm:px-4">
+            <div className="mx-auto max-w-[1400px] px-3 py-3 text-sm text-ink-2 sm:px-5">
               <ol className="list-decimal space-y-1 pl-5">
-                <li>You ask one question. {lead} writes the best full answer it can, alone. That is version one, on screen in under a minute.</li>
-                <li>{table.slice(1).map(s => s.label).join(' and ')} write their own answer blind, then attack {lead}'s on substance. Every objection quotes the exact claim and says what would fix it.</li>
-                <li>Disputed facts are checked on the web. Then {lead} revises. Every change cites an objection, a source, or your message, or the system refuses it.</li>
-                <li>A critic rules on whether each fix holds. What survives is the room's answer. Anything still standing shows as an open risk.</li>
+                <li>You ask one question. Round one: {lead} writes the best full answer it can, alone. {table.slice(1).map(s => s.label).join(' and ')} write their own blind.</li>
+                <li>Round two: the challengers attack {lead}'s answer on substance. Every hit quotes the exact claim and says what would fix it.</li>
+                <li>Round three: disputed facts are checked on the web. A claim stands or is refuted, with the source.</li>
+                <li>Round four: {lead} comes back. Every change cites a hit, a source, or your message, or the system refuses it. Round five: the fixes are ruled on. What survives is the decision.</li>
               </ol>
               <p className="mt-2">Type at any time. Your message is read on the next turn, and any section it changes carries your name.</p>
             </div>
           </div>
         )}
+        {question && (
+          <div className="border-t border-line-2 py-1.5">
+            <RoundBar question={question} openRisks={openRisks} />
+          </div>
+        )}
       </header>
 
-      <div
-        ref={listRef}
-        onScroll={e => {
-          const el = e.currentTarget;
-          nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
-        }}
-        className="min-h-0 flex-1 overflow-y-auto"
-      >
-        <div className="mx-auto max-w-[760px] space-y-6 px-3 pb-6 pt-4 sm:px-4">
-          {justJoined && (
-            <p className="text-center text-xs text-muted">
-              Welcome, {myMember.name}. {question ? 'This is the argument behind the answer. Type below to steer it.' : 'Ask the room one question below.'}
-            </p>
-          )}
-          {past.map(pq => (
-            <PastThread key={pq.id.toString()} room={room} question={pq} notes={notes} teamQs={teamQs} slots={slots} now={now} myName={myMember.name} />
-          ))}
-          {question ? (
-            <Thread
-              room={room}
-              question={question}
-              notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
-              teamQs={teamQs.filter(t => t.questionId === question.id)}
-              drafts={drafts}
-              objections={objections}
-              evidence={evidence}
-              paragraphs={paragraphs}
-              versions={versions}
-              statuses={statuses}
-              slots={slots}
-              now={now}
-              myName={myMember.name}
-              onReply={setReplyTo}
-            />
-          ) : (
-            <div className="mx-auto max-w-md pt-16 text-center">
-              <p className="font-display text-2xl leading-tight">This room is waiting for its first question.</p>
-              <p className="mt-2 text-sm text-muted">Keep it concrete: a decision, a plan, a claim you want stress-tested.</p>
-            </div>
-          )}
-        </div>
-      </div>
+      {justJoined && (
+        <p className="shrink-0 py-1 text-center text-xs text-muted">
+          Welcome, {myMember.name}. {question ? `This is the bout behind the answer. ${lead} defends, the others attack. Type below to step in.` : 'Ask the room one question below.'}
+        </p>
+      )}
 
-      <Composer
-        room={room}
-        question={question}
-        openTeamQs={openTeamQs}
-        queued={queued}
-        slots={slots}
-        replyTo={replyTo}
-        onReplyTo={setReplyTo}
-        onSent={() => {
-          forceScroll.current = true;
-          nearBottom.current = true;
-        }}
-      />
+      {question ? (
+        <Arena
+          room={room}
+          question={question}
+          notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
+          teamQs={teamQs.filter(t => t.questionId === question.id)}
+          drafts={drafts}
+          objections={objections}
+          evidence={evidence}
+          paragraphs={paragraphs}
+          versions={versions}
+          statuses={statuses}
+          slots={slots}
+          now={now}
+          myName={myMember.name}
+          onReply={setReplyTo}
+        />
+      ) : (
+        <div className="flex flex-1 items-center justify-center px-5 text-center">
+          <div className="max-w-md">
+            <p className="font-display text-2xl leading-tight">This room is waiting for its first question.</p>
+            <p className="mt-2 text-sm text-muted">Keep it concrete: a decision, a plan, a claim you want stress-tested.</p>
+          </div>
+        </div>
+      )}
+
+      <Composer room={room} question={latest} openTeamQs={openTeamQs} queued={queued} slots={slots} replyTo={replyTo} onReplyTo={setReplyTo} onSent={() => setViewQid(null)} />
     </div>
   );
 }
