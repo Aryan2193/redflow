@@ -82,3 +82,9 @@
 ## 21:48
 - Trap found via mentor room 672H: after settle the composer flipped to ask mode and a one-word reply became question 8 "answered". Fixed: ask mode is explicit after the first question; server rejects questions under 15 chars or 3 words; team questions answerable inline in the stream.
 - Module republished both servers; preview dist rebuilt; Pages staging refreshed.
+
+## 23:28 pipeline v2 + UI v2 (after Aryan: "plain Claude beat us", "UI pathetic")
+- Roster: lead/chair anthropic/claude-sonnet-5 (prompt JSON + json_object), critics perplexity/sonar-pro (web) + openai/gpt-5.2 (low), checker perplexity/sonar-pro. Perplexity tested: best fact-checker (5.5s, primary sources, 1c). Claude native web costs 9c/call (30k tokens injected): avoid.
+- Flow: lead full answer = v1 (~20-35s), critics draft blind then attack substance with fixes, checker, lead revises (no hedging, cause per edit, overrule with reason), one verifier. 8 calls, ~15c/question.
+- Bug found: Claude output truncated at max_tokens => "invalid json". Fixed with +4000 headroom, finish_reason detection, string sanitizer.
+- UI v2: document answer (headings + markdown), 5-stage stepper + narrative, debate rail with avatars/chapters, labels Verified/Agreed/Disputed/Open risk, before/after toggle "Claude alone".
