@@ -767,7 +767,8 @@ function callModel(
     max_tokens: maxTokens + 1400,
     temperature: 0.4,
     response_format: { type: 'json_schema', json_schema: { name: 'redflow', strict: true, schema: jsonSchema } },
-    provider: { require_parameters: true },
+    // Council and checker are routed to the fastest provider. The chair keeps default routing for quality.
+    provider: slotRow.slot === 'chair' ? { require_parameters: true } : { require_parameters: true, sort: 'latency' },
   };
   const effort = (slotRow.reasoning || '').trim();
   if (effort === 'none') body.reasoning = { exclude: true, max_tokens: 64 };
