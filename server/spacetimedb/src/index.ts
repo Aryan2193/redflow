@@ -43,6 +43,7 @@ const model_slot = table(
     providerId: t.u32(),
     useWeb: t.bool(),
     enabled: t.bool(),
+    reasoning: t.string().default(''), // '' | low | medium | high | none. Thinking models burn the token budget unless told otherwise.
   }
 );
 
@@ -302,14 +303,14 @@ export const init = spacetimedb.init(ctx => {
   });
   ctx.db.provider.insert({ id: 1, name: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '', enabled: true });
   const seed = [
-    ['council_a', 'deepseek/deepseek-v4-flash-0731', 'DeepSeek', false],
-    ['council_b', 'qwen/qwen3.8-27b', 'Qwen', false],
-    ['council_c', 'moonshotai/kimi-k3', 'Kimi', false],
-    ['checker', 'deepseek/deepseek-v4-flash-0731', 'DeepSeek', true],
-    ['chair', 'anthropic/claude-sonnet-5', 'Claude', false],
+    ['council_a', 'deepseek/deepseek-v4-flash-0731', 'DeepSeek', false, 'low'],
+    ['council_b', 'openai/gpt-oss-120b', 'GPT-OSS', false, 'low'],
+    ['council_c', 'meta-llama/llama-4-maverick', 'Llama', false, ''],
+    ['checker', 'deepseek/deepseek-v4-flash-0731', 'DeepSeek', true, 'low'],
+    ['chair', 'anthropic/claude-sonnet-4.6', 'Claude', false, ''],
   ] as const;
-  for (const [slot, model, label, useWeb] of seed) {
-    ctx.db.model_slot.insert({ slot, model, label, providerId: 1, useWeb, enabled: true });
+  for (const [slot, model, label, useWeb, reasoning] of seed) {
+    ctx.db.model_slot.insert({ slot, model, label, providerId: 1, useWeb, enabled: true, reasoning });
   }
 });
 
@@ -342,12 +343,12 @@ export const setProviderKey = spacetimedb.reducer(
 );
 
 export const setModelSlot = spacetimedb.reducer(
-  { slot: t.string(), model: t.string(), label: t.string(), providerId: t.u32(), useWeb: t.bool() },
-  (ctx, { slot, model, label, providerId, useWeb }) => {
+  { slot: t.string(), model: t.string(), label: t.string(), providerId: t.u32(), useWeb: t.bool(), reasoning: t.string() },
+  (ctx, { slot, model, label, providerId, useWeb, reasoning }) => {
     requireOwner(ctx);
     const s = ctx.db.model_slot.slot.find(slot);
-    if (s) ctx.db.model_slot.slot.update({ ...s, model, label, providerId, useWeb, enabled: true });
-    else ctx.db.model_slot.insert({ slot, model, label, providerId, useWeb, enabled: true });
+    if (s) ctx.db.model_slot.slot.update({ ...s, model, label, providerId, useWeb, enabled: true, reasoning });
+    else ctx.db.model_slot.insert({ slot, model, label, providerId, useWeb, enabled: true, reasoning });
   }
 );
 
@@ -650,7 +651,7 @@ function repairJson(text: string): string {
 
 function callModel(
   ctx: any,
-  slotRow: { model: string; providerId: number; useWeb: boolean; slot: string },
+  slotRow: { model: string; providerId: number; useWeb: boolean; slot: string; reasoning?: string },
   prov: { baseUrl: string; apiKey: string },
   system: string,
   user: string,
@@ -665,11 +666,15 @@ function callModel(
       { role: 'system', content: system },
       { role: 'user', content: user },
     ],
-    max_tokens: maxTokens,
+    // Thinking models spend the budget on hidden reasoning first. Leave headroom so the JSON is never truncated.
+    max_tokens: maxTokens + 1400,
     temperature: 0.4,
     response_format: { type: 'json_schema', json_schema: { name: 'redflow', strict: true, schema: jsonSchema } },
-    provider: { require_parameters: true, sort: 'latency' },
+    provider: { require_parameters: true },
   };
+  const effort = (slotRow.reasoning || '').trim();
+  if (effort === 'none') body.reasoning = { exclude: true, max_tokens: 64 };
+  else if (effort) body.reasoning = { effort };
   if (webResults > 0) body.plugins = [{ id: 'web', max_results: webResults }];
   let status = -1;
   let raw = '';
@@ -838,18 +843,42 @@ function noteCall(tx: Tx, questionId: bigint, roomId: bigint) {
   if (r) tx.db.room.id.update({ ...r, callsUsed: r.callsUsed + 1 });
 }
 
+const FAN_OUT_STEPS = new Set(['draft', 'critique', 'verify']);
+
 function failStep(ctx: any, arg: any, load: any, error: string) {
   ctx.withTx((tx: Tx) => {
     const q = tx.db.question.id.find(arg.questionId);
     if (!q) return;
-    setAgentStatus(tx.db, tx.timestamp, q.id, arg.slot, 'failed', error.slice(0, 160));
     if (arg.attempt < 2) {
+      // A retry is still in flight. It must not count as a failure for fan-in.
+      setAgentStatus(tx.db, tx.timestamp, q.id, arg.slot, 'reading', 'retrying after: ' + error.slice(0, 120));
       scheduleStep(tx.db, tx.timestamp, q.id, arg.round, arg.step, arg.slot, arg.attempt + 1);
       tx.db.question.id.update({ ...q, lastError: `${arg.step}/${arg.slot}: ${error.slice(0, 200)} (retrying)`, updatedAt: tx.timestamp });
-    } else {
-      tx.db.question.id.update({ ...q, lastError: `${arg.step}/${arg.slot}: ${error.slice(0, 200)}`, updatedAt: tx.timestamp });
-      // Keep the room moving: treat a permanently failed draft or critique as absent and let fan-in proceed.
+      return;
+    }
+    setAgentStatus(tx.db, tx.timestamp, q.id, arg.slot, 'failed', error.slice(0, 160));
+    tx.db.question.id.update({ ...q, lastError: `${arg.step}/${arg.slot}: ${error.slice(0, 200)}`, updatedAt: tx.timestamp });
+    if (FAN_OUT_STEPS.has(arg.step)) {
+      // Keep the room moving: a permanently failed draft, critique, or verification counts as absent.
       afterFanInCheck(tx, q.id, arg.step, load.slots);
+    } else if (arg.step === 'ground') {
+      // The checker is optional. Skip straight to synthesis.
+      tx.db.question.id.update({ ...q, state: 'synthesizing', lastError: `checker failed: ${error.slice(0, 160)}`, updatedAt: tx.timestamp });
+      scheduleStep(tx.db, tx.timestamp, q.id, q.round, 'synthesize', 'chair');
+    } else {
+      // The chair failed for good. Publish what exists and settle so the room is never stuck.
+      const qq = tx.db.question.id.find(q.id)!;
+      if (qq.version === 0) {
+        const drafts = [...tx.db.draft.questionId.filter(q.id)];
+        if (drafts.length) {
+          drafts[0].text.split(/\n\n+/).forEach((para, i) => {
+            tx.db.paragraph.insert({ id: 0n, questionId: q.id, ordinal: i + 1, version: 1, text: para, status: 'agreed', causeType: 'draft', causeId: drafts[0].id, why: `From draft ${drafts[0].label || drafts[0].slot}. The chair was unavailable.`, createdAt: tx.timestamp, current: true });
+          });
+          tx.db.answer_version.insert({ id: 0n, questionId: q.id, version: 1, round: q.round, summary: 'The chair was unavailable. Showing the strongest draft as is.', createdAt: tx.timestamp });
+          tx.db.question.id.update({ ...qq, version: 1 });
+        }
+      }
+      settle(tx, q.id, 'chair unavailable');
     }
   });
   return {};

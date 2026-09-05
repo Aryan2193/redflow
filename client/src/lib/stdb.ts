@@ -1,0 +1,65 @@
+import { DbConnection } from '../module_bindings';
+
+export const STDB_URI = (import.meta.env.VITE_STDB_URI as string | undefined) ?? 'ws://127.0.0.1:3000';
+export const STDB_DB = (import.meta.env.VITE_STDB_DB as string | undefined) ?? 'redflow';
+
+const TOKEN_KEY = 'redflow.token';
+const NAME_KEY = 'redflow.name';
+
+export function savedName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function rememberName(name: string) {
+  try {
+    localStorage.setItem(NAME_KEY, name);
+  } catch {
+    // storage unavailable, the name simply is not remembered
+  }
+}
+
+function savedToken(): string | undefined {
+  try {
+    return localStorage.getItem(TOKEN_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function buildConnection() {
+  let builder = DbConnection.builder()
+    .withUri(STDB_URI)
+    .withDatabaseName(STDB_DB)
+    .onConnect((_conn, _identity, token) => {
+      try {
+        localStorage.setItem(TOKEN_KEY, token);
+      } catch {
+        // fine
+      }
+    });
+  const token = savedToken();
+  if (token) builder = builder.withToken(token);
+  return builder;
+}
+
+export function idHex(x: { toHexString(): string } | undefined | null): string {
+  return x ? x.toHexString() : '';
+}
+
+export function toDate(ts: { microsSinceUnixEpoch: bigint }): Date {
+  return new Date(Number(ts.microsSinceUnixEpoch / 1000n));
+}
+
+export function timeAgo(ts: { microsSinceUnixEpoch: bigint }, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - toDate(ts).getTime()) / 1000));
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  return `${h}h ago`;
+}

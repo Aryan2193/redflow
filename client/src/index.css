@@ -1,1 +1,95 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+
+@theme {
+  --color-paper: #f6f4ef;
+  --color-sheet: #fffdf9;
+  --color-ink: #1c1a17;
+  --color-ink-2: #4a463f;
+  --color-muted: #7a746a;
+  --color-line: #e2ddd3;
+  --color-line-2: #ece8e0;
+  --color-red: #b8321f;
+  --color-red-soft: #f9e4df;
+  --color-ok: #2f7a4d;
+  --color-ok-soft: #e0f1e6;
+  --color-warn: #a86a0b;
+  --color-warn-soft: #f8ecd3;
+  --color-judg: #5a6577;
+  --color-judg-soft: #e6e9ee;
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+}
+
+html {
+  background: var(--color-paper);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.answer-text {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  line-height: 1.55;
+  letter-spacing: 0.002em;
+}
+
+.diff-add {
+  background: var(--color-ok-soft);
+  color: var(--color-ok);
+  border-radius: 2px;
+}
+.diff-del {
+  background: var(--color-red-soft);
+  color: var(--color-red);
+  text-decoration: line-through;
+  border-radius: 2px;
+}
+
+@keyframes landed {
+  0% {
+    background-color: var(--color-warn-soft);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.landed {
+  animation: landed 2.4s ease-out 1;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.pulse {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landed,
+  .pulse {
+    animation: none;
+  }
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+::selection {
+  background: #f3d9c9;
+}
