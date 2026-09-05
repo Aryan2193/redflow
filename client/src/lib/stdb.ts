@@ -3,7 +3,8 @@ import { DbConnection } from '../module_bindings';
 export const STDB_URI = (import.meta.env.VITE_STDB_URI as string | undefined) ?? 'ws://127.0.0.1:3000';
 export const STDB_DB = (import.meta.env.VITE_STDB_DB as string | undefined) ?? 'redflow';
 
-const TOKEN_KEY = 'redflow.token';
+// Tokens are issued per server. A local-server token presented to Maincloud is rejected with 401 forever.
+const TOKEN_KEY = `redflow.token.${STDB_URI}.${STDB_DB}`;
 const NAME_KEY = 'redflow.name';
 
 export function savedName(): string {
@@ -37,8 +38,23 @@ export function buildConnection() {
     .onConnect((_conn, _identity, token) => {
       try {
         localStorage.setItem(TOKEN_KEY, token);
+        sessionStorage.removeItem('redflow.reloaded');
       } catch {
         // fine
+      }
+    })
+    .onConnectError((_ctx, err) => {
+      const msg = String((err as Error)?.message ?? err);
+      if (/401|unauthori|token|identity/i.test(msg)) {
+        try {
+          localStorage.removeItem(TOKEN_KEY);
+          if (!sessionStorage.getItem('redflow.reloaded')) {
+            sessionStorage.setItem('redflow.reloaded', '1');
+            window.location.reload();
+          }
+        } catch {
+          // fine
+        }
       }
     });
   const token = savedToken();

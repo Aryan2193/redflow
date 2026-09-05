@@ -317,10 +317,10 @@ export const init = spacetimedb.init(ctx => {
   });
   ctx.db.provider.insert({ id: 1, name: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '', enabled: true, extra: '' });
   const seed = [
-    ['council_a', 'deepseek/deepseek-v4-flash-0731', 'DeepSeek', false, 'low'],
+    ['council_a', 'z-ai/glm-5.3-flash', 'GLM', false, ''],
     ['council_b', 'openai/gpt-oss-120b', 'GPT-OSS', false, 'low'],
     ['council_c', 'meta-llama/llama-4-maverick', 'Llama', false, ''],
-    ['checker', 'deepseek/deepseek-v4-flash-0731', 'DeepSeek', true, 'low'],
+    ['checker', 'openai/gpt-oss-120b', 'GPT-OSS', true, 'low'],
     ['chair', 'anthropic/claude-sonnet-4.6', 'Claude', false, ''],
   ] as const;
   for (const [slot, model, label, useWeb, reasoning] of seed) {
@@ -1580,6 +1580,7 @@ function stepSynthesize(ctx: any, load: any, arg: any) {
     let applied = 0;
     let refused = 0;
     let nextOrdinal = current.reduce((m, p) => Math.max(m, p.ordinal), 0) + 1;
+    const touched = new Set<number>(); // one edit per paragraph per pass, or the answer grows duplicates
     for (const e of edits) {
       const causeType = str(e?.cause_type, 20);
       const causeId = int(e?.cause_id, 0, 1_000_000_000, -1);
@@ -1598,15 +1599,21 @@ function stepSynthesize(ctx: any, load: any, arg: any) {
       const causeLabel = causeType === 'objection' ? `objection ${causeId}` : causeType === 'evidence' ? `source ${causeId}` : `note ${causeId}`;
       const noteAuthor = causeType === 'note' ? (fresh.find((n: any) => Number(n.id) === causeId)?.authorName ?? answered.find((t: any) => Number(t.id) === causeId)?.answeredByName ?? '') : '';
       const whyFull = (noteAuthor ? `Because ${noteAuthor} said so: ` : `Because of ${causeLabel}: `) + why;
+      if ((action === 'remove' || action === 'rewrite') && touched.has(ordinal)) {
+        refused++;
+        continue;
+      }
       if (action === 'remove') {
         const p = current.find(p => p.ordinal === ordinal);
         if (!p) { refused++; continue; }
+        touched.add(ordinal);
         tx.db.paragraph.id.update({ ...p, current: false });
         tx.db.paragraph.insert({ id: 0n, questionId: q.id, ordinal, version, text: '', status: 'agreed', causeType, causeId: BigInt(causeId), why: 'Removed. ' + whyFull, createdAt: tx.timestamp, current: false });
         applied++;
       } else if (action === 'rewrite') {
         const p = current.find(p => p.ordinal === ordinal);
         if (!p || !text) { refused++; continue; }
+        touched.add(ordinal);
         tx.db.paragraph.id.update({ ...p, current: false });
         tx.db.paragraph.insert({ id: 0n, questionId: q.id, ordinal, version, text, status: causeType === 'evidence' ? 'verified' : 'agreed', causeType, causeId: BigInt(causeId), why: whyFull, createdAt: tx.timestamp, current: true });
         applied++;
