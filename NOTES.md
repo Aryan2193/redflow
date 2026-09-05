@@ -46,3 +46,8 @@
 - Rejected: GLM 5.3 flash (18s to 153s), qwen3.x flash (14-23s), deepseek v4 flash (10s, bad JSON), glm-4.7, gemini-3.5-flash-lite (1 objection only).
 - Maincloud demo loop: ask 18:45:21, v1 18:46:02 (41s), settled 18:48:33 (3m12s).
 - Chair may now overrule objections with a reason (status overruled) instead of leaving them to expire unresolved.
+
+## 18:58
+- Cost: 5 full questions + probes = $0.27 total (~5c/question). $18.46 left.
+- Overrule path verified (local q4: 4 withdrawn, 5 overruled, 0 unresolved, settled ~2 min).
+- Public URL blocked on Aryan: GitHub Pages fallback staged at C:/Users/aryan/redflow-web (needs `gh repo create --public` + pages API, classifier blocks me); or domain deploy once DNS host known.
