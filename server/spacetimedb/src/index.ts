@@ -594,10 +594,17 @@ function startQuestion(ctx: Ctx, roomId: bigint, askerName: string, body: string
   for (const n of ctx.db.note.roomId.filter(roomId)) {
     if (n.questionId === 0n && n.consumedStep === '') ctx.db.note.id.update({ ...n, questionId: q.id });
   }
-  // The lead is scheduled first so version one lands as early as possible. Procedures run one at a time.
-  for (const slot of COUNCIL) {
-    scheduleStep(ctx.db, ctx.timestamp, q.id, 1, 'draft', slot);
-    setAgentStatus(ctx.db, ctx.timestamp, q.id, slot, 'reading', slot === LEAD ? 'writing the first answer' : 'drafting an alternative, blind');
+  // Only the lead is scheduled now. The scheduler does not honor insertion order and procedures run one at a
+  // time, so the critics' blind drafts are queued the moment the lead's answer lands (see stepDraft).
+  scheduleStep(ctx.db, ctx.timestamp, q.id, 1, 'draft', LEAD);
+  setAgentStatus(ctx.db, ctx.timestamp, q.id, LEAD, 'reading', 'writing the first answer');
+  for (const slot of CRITICS) setAgentStatus(ctx.db, ctx.timestamp, q.id, slot, 'reading', 'waiting to draft an alternative, blind');
+}
+
+function scheduleCriticDrafts(tx: Tx, questionId: bigint, round: number, slots: any[]) {
+  for (const s of enabledSlots(slots, CRITICS)) {
+    scheduleStep(tx.db, tx.timestamp, questionId, round, 'draft', s);
+    setAgentStatus(tx.db, tx.timestamp, questionId, s, 'drafting', 'writing an alternative, blind');
   }
 }
 
@@ -954,7 +961,10 @@ function failStep(ctx: any, arg: any, load: any, error: string) {
     }
     setAgentStatus(tx.db, tx.timestamp, q.id, arg.slot, 'failed', error.slice(0, 160));
     tx.db.question.id.update({ ...q, lastError: `${arg.step}/${arg.slot}: ${error.slice(0, 200)}`, updatedAt: tx.timestamp });
-    if (FAN_OUT_STEPS.has(arg.step) || arg.step === 'dissent') {
+    if (arg.step === 'draft' && arg.slot === LEAD) {
+      // The lead could not draft. The critics still draft, and the strongest of theirs becomes version one at fan-in.
+      scheduleCriticDrafts(tx, q.id, arg.round, load.slots);
+    } else if (FAN_OUT_STEPS.has(arg.step) || arg.step === 'dissent') {
       afterFanInCheck(tx, q.id, arg.step === 'dissent' ? 'critique' : arg.step, load.slots);
     } else if (arg.step === 'ground') {
       tx.db.question.id.update({ ...q, state: 'synthesizing', lastError: `checker failed: ${error.slice(0, 160)}`, updatedAt: tx.timestamp });
@@ -1081,6 +1091,8 @@ function stepDraft(ctx: any, load: any, arg: any) {
         createdAt: tx.timestamp,
       });
       tx.db.question.id.update({ ...qq, version: 1, updatedAt: tx.timestamp });
+      // Version one is on screen. Now the critics write their own view, blind, before they attack it.
+      scheduleCriticDrafts(tx, q.id, qq.round, load.slots);
     }
     setAgentStatus(tx.db, tx.timestamp, q.id, arg.slot, 'done', isLead ? 'first answer is up' : 'alternative draft in');
     afterFanInCheck(tx, q.id, 'draft', load.slots);
@@ -1598,8 +1610,13 @@ export const watchdogTick = spacetimedb.reducer({ timer: watchdog_schedule.rowTy
     switch (q.state) {
       case 'drafting': {
         const have = new Set([...ctx.db.draft.questionId.filter(q.id)].filter(d => d.round === q.round).map(d => d.slot));
-        for (const s of enabledSlots(slots, COUNCIL)) if (!have.has(s) && stillWorking(s)) { scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'draft', s); restarted += s + ' '; }
-        if (!restarted) afterFanInCheck(txLike, q.id, 'draft', slots);
+        if (!have.has(LEAD) && q.version === 0 && stillWorking(LEAD)) {
+          scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'draft', LEAD);
+          restarted = LEAD;
+        } else {
+          for (const s of enabledSlots(slots, CRITICS)) if (!have.has(s) && stillWorking(s)) { scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'draft', s); restarted += s + ' '; }
+          if (!restarted) afterFanInCheck(txLike, q.id, 'draft', slots);
+        }
         break;
       }
       case 'critiquing':
