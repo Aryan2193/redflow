@@ -39,7 +39,11 @@ export default function Stream(p: Props) {
   useAutosize(taRef, text, 200);
 
   const q = p.question;
-  const canAsk = !q || q.state === 'settled' || q.state === 'failed';
+  const questionOpen = !!q && q.state !== 'settled' && q.state !== 'failed';
+  // Asking is deliberate. The shared box defaults to notes once a question exists; a settled room needs an explicit switch.
+  const [askMode, setAskMode] = useState(false);
+  const canAsk = !q || (!questionOpen && askMode);
+  const [tqAnswers, setTqAnswers] = useState<Record<string, string>>({});
   const label = (slot: string) => p.slots.find(s => s.slot === slot)?.label ?? slot;
   const queued = q ? p.notes.filter(n => n.questionId === q.id && n.consumedStep === '' && n.teamQuestionId === 0n).length : 0;
 
@@ -105,7 +109,32 @@ export default function Stream(p: Props) {
             <div className="rounded-lg border border-warn bg-warn-soft/60 px-3 py-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-warn">The room asks the team</div>
               <div>{t.text}</div>
-              {t.answeredAt && <div className="mt-1 text-xs text-muted">Answered by {t.answeredByName}</div>}
+              {t.answeredAt ? (
+                <div className="mt-1 text-xs text-muted">Answered by {t.answeredByName}</div>
+              ) : (
+                <form
+                  className="mt-2 flex gap-2"
+                  onSubmit={async e => {
+                    e.preventDefault();
+                    const text = (tqAnswers[t.id.toString()] ?? '').trim();
+                    if (!text) return;
+                    try {
+                      await postNote({ roomId: p.room.id, text, teamQuestionId: t.id });
+                      setTqAnswers(a => ({ ...a, [t.id.toString()]: '' }));
+                    } catch (e2) {
+                      setErr(String((e2 as Error)?.message ?? e2));
+                    }
+                  }}
+                >
+                  <input
+                    value={tqAnswers[t.id.toString()] ?? ''}
+                    onChange={e => setTqAnswers(a => ({ ...a, [t.id.toString()]: e.target.value }))}
+                    placeholder="Answer here"
+                    className="flex-1 rounded-md border border-line bg-sheet px-2.5 py-1.5 text-sm outline-none focus:border-ink"
+                  />
+                  <button className="rounded-md bg-ink px-3 py-1.5 text-sm font-semibold text-paper">Answer</button>
+                </form>
+              )}
             </div>
           ),
         });
@@ -191,8 +220,9 @@ export default function Stream(p: Props) {
       if (canAsk) await ask({ roomId: p.room.id, text: body });
       else await postNote({ roomId: p.room.id, text: body, teamQuestionId: 0n });
       setText('');
+      setAskMode(false);
       forceScroll.current = true;
-      setHint(!canAsk && q && q.state === 'settled' ? 'The answer has settled. Press Go deeper on the Answer tab to make the room take this into account.' : '');
+      setHint(!canAsk && q && q.state === 'settled' ? 'The answer has settled. Your note is saved. Press Go deeper on the Answer tab to make the room take it into account, or start a new question.' : '');
     } catch (e2) {
       setErr(String((e2 as Error)?.message ?? e2));
     } finally {
@@ -242,11 +272,18 @@ export default function Stream(p: Props) {
       </div>
 
       <form onSubmit={send} className="shrink-0 border-t border-line bg-paper px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
-        {queued > 0 && (
-          <div className="mb-1.5 text-xs text-muted">
-            {queued} note{queued === 1 ? '' : 's'} waiting for the agents' next turn
-          </div>
-        )}
+        <div className="mb-1.5 flex items-center gap-3 text-xs text-muted">
+          {queued > 0 && (
+            <span>
+              {queued} note{queued === 1 ? '' : 's'} waiting for the agents' next turn
+            </span>
+          )}
+          {q && !questionOpen && (
+            <button type="button" onClick={() => setAskMode(v => !v)} className="ml-auto rounded-full border border-line px-2 py-0.5 text-ink-2">
+              {askMode ? 'Back to notes' : 'Ask a new question'}
+            </button>
+          )}
+        </div>
         <div className="flex items-end gap-2">
           <textarea
             ref={taRef}
@@ -259,7 +296,7 @@ export default function Stream(p: Props) {
               }
             }}
             rows={1}
-            placeholder={canAsk ? 'Ask the room one question' : 'Add context or a correction. The agents read it on their next turn.'}
+            placeholder={canAsk ? (q ? 'Ask the room a new question' : 'Ask the room one question') : questionOpen ? 'Add context or a correction. The agents read it on their next turn.' : 'Add a note for the next round, or switch to a new question above.'}
             className="flex-1 resize-none rounded-md border border-line bg-sheet px-3 py-2 outline-none focus:border-ink"
             maxLength={2000}
           />

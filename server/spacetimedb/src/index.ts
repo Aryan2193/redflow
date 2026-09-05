@@ -576,6 +576,14 @@ export const postNote = spacetimedb.reducer(
   }
 );
 
+// A question is a sentence, not a word. One-word "questions" were replies typed into the wrong box.
+function cleanQuestion(text: string) {
+  const body = text.trim().slice(0, 2000);
+  const words = body.split(/\s+/).filter(Boolean);
+  if (body.length < 15 || words.length < 3) throw new SenderError('ask a fuller question, one or two sentences');
+  return body;
+}
+
 // Title for a room opened straight from a question: the first clause, cut at a word boundary.
 function deriveTitle(question: string) {
   const firstSentence = question.trim().split(/(?<=[.?!])\s+/)[0] ?? question.trim();
@@ -589,8 +597,7 @@ export const openRoom = spacetimedb.reducer({ name: t.string(), question: t.stri
   const cfg = ctx.db.config.id.find(0)!;
   if (cfg.killSwitch) throw new SenderError('rooms are paused right now');
   const who = cleanName(name);
-  const body = question.trim().slice(0, 2000);
-  if (body.length < 8) throw new SenderError('ask a fuller question');
+  const body = cleanQuestion(question);
   const r = ctx.db.room.insert({
     id: 0n,
     code: makeCode(ctx),
@@ -609,8 +616,7 @@ export const ask = spacetimedb.reducer({ roomId: t.u64(), text: t.string() }, (c
   const cfg = ctx.db.config.id.find(0)!;
   if (cfg.killSwitch) throw new SenderError('the room is paused right now');
   const m = requireMember(ctx, roomId);
-  const body = text.trim().slice(0, 2000);
-  if (body.length < 8) throw new SenderError('ask a fuller question');
+  const body = cleanQuestion(text);
   const current = activeQuestion(ctx.db, roomId);
   if (current && current.state !== 'settled' && current.state !== 'failed') {
     throw new SenderError('one question at a time. Add a note, or wrap up the current one');
