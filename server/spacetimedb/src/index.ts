@@ -292,7 +292,18 @@ const watchdog_schedule = table(
   }
 );
 
+// A welcome email with the room link, sent when someone signs in with their email.
+const welcome_schedule = table(
+  { name: 'welcome_schedule', scheduled: (): any => sendWelcome },
+  {
+    scheduled_id: t.u64().primaryKey().autoInc(),
+    scheduled_at: t.scheduleAt(),
+    requestId: t.u64(),
+  }
+);
+
 const spacetimedb = schema({
+  welcome_schedule,
   watchdog_schedule,
   config,
   provider,
@@ -662,6 +673,87 @@ export const requestVerdictEmail = spacetimedb.reducer(
     scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'email', 'chair');
   }
 );
+
+// Sign in with an email: the room link lands in the inbox within a minute, so the member can rejoin from any device.
+export const requestJoinEmail = spacetimedb.reducer({ roomId: t.u64(), email: t.string() }, (ctx, { roomId, email }) => {
+  requireMember(ctx, roomId);
+  const e = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new SenderError('that does not look like an email');
+  const recent = [...ctx.db.email_request.iter()].filter(x => x.roomId === roomId && x.questionId === 0n && x.email === e && ctx.timestamp.microsSinceUnixEpoch - x.createdAt.microsSinceUnixEpoch < 600n * 1_000_000n);
+  if (recent.length) return;
+  const row = ctx.db.email_request.insert({ id: 0n, roomId, questionId: 0n, email: e, createdAt: ctx.timestamp, sentAt: undefined, status: 'queued' });
+  ctx.db.welcome_schedule.insert({ scheduled_id: 0n, scheduled_at: ScheduleAt.time(ctx.timestamp.microsSinceUnixEpoch + 1_000_000n), requestId: row.id });
+});
+
+export const sendWelcome = spacetimedb.procedure({ arg: welcome_schedule.rowType }, t.unit(), (ctx, { arg }) => {
+  const data = ctx.withTx((tx: Tx) => {
+    const req = tx.db.email_request.id.find(arg.requestId);
+    if (!req || req.status !== 'queued') return null;
+    const cfg = tx.db.config.id.find(0)!;
+    const r = tx.db.room.id.find(req.roomId);
+    const prov = tx.db.provider.id.find(2);
+    const models = [...tx.db.model_slot.iter()].filter(s => s.enabled && s.slot.startsWith('council')).map(s => s.label);
+    return { req, cfg, r, prov, models };
+  });
+  if (!data) return {};
+  const { req, cfg, r, prov, models } = data;
+  const mark = (status: string) =>
+    ctx.withTx((tx: Tx) => {
+      const row = tx.db.email_request.id.find(req.id);
+      if (row) tx.db.email_request.id.update({ ...row, status, sentAt: status === 'sent' ? tx.timestamp : row.sentAt });
+    });
+  if (!prov || !prov.enabled || !prov.baseUrl) {
+    mark('no_provider');
+    return {};
+  }
+  const link = cfg.siteUrl ? `${cfg.siteUrl.replace(/\/$/, '')}/r/${r?.code ?? ''}` : '';
+  const subject = `Your Redflow room: ${r?.title?.slice(0, 60) ?? r?.code ?? ''}`;
+  const text = [
+    `You are in. Room ${r?.code ?? ''}: ${r?.title ?? ''}`,
+    '',
+    link ? `Open it from any device: ${link}` : `Room code: ${r?.code ?? ''}`,
+    '',
+    `${models.join(', ')} fight over your team's question in there. You can step in at any time.`,
+    '',
+    'Sent by Redflow.',
+  ].join('\n');
+  const html =
+    `<div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;padding:24px;color:#1c1a17">` +
+    `<p style="font:12px/1.4 sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7a746a;margin:0 0 8px">Redflow</p>` +
+    `<h1 style="font-size:22px;line-height:1.3;margin:0 0 12px">You are in.</h1>` +
+    `<p style="font-size:16px;line-height:1.5;margin:0 0 16px">Room <strong style="font-family:monospace;letter-spacing:.2em">${escapeHtml(r?.code ?? '')}</strong>: ${escapeHtml(r?.title ?? '')}</p>` +
+    (link ? `<p style="margin:0 0 20px"><a href="${escapeHtml(link)}" style="display:inline-block;background:#1c1a17;color:#f7f5f0;text-decoration:none;font:600 15px sans-serif;padding:10px 16px;border-radius:999px">Open the room</a></p>` : '') +
+    `<p style="font:14px/1.6 sans-serif;color:#4a463f;margin:0 0 6px">${escapeHtml(models.join(', '))} fight over your team's question in there. You can step in at any time.</p>` +
+    `<p style="font:12px sans-serif;color:#7a746a;margin-top:24px">Sent by Redflow.</p></div>`;
+  let ok = false;
+  let err = '';
+  try {
+    if (prov.name === 'resend') {
+      const res = ctx.http.fetch(prov.baseUrl.replace(/\/$/, '') + '/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + prov.apiKey },
+        body: JSON.stringify({ from: prov.extra || 'Redflow <onboarding@resend.dev>', to: [req.email], subject, html, text }),
+        timeout: TimeDuration.fromMillis(20_000),
+      });
+      ok = res.status >= 200 && res.status < 300;
+      if (!ok) err = `resend ${res.status} ${res.text().slice(0, 160)}`;
+    } else {
+      const res = ctx.http.fetch(prov.baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: prov.extra, to: req.email, subject, html, text }),
+        timeout: TimeDuration.fromMillis(20_000),
+      });
+      ok = res.status >= 200 && res.status < 400;
+      if (!ok) err = `webhook ${res.status} ${res.text().slice(0, 160)}`;
+    }
+  } catch (e) {
+    err = 'fetch failed: ' + String(e).slice(0, 160);
+  }
+  console.log(`welcome email to ${req.email}: ${ok ? 'sent' : err}`);
+  mark(ok ? 'sent' : 'failed');
+  return {};
+});
 
 // ---------------------------------------------------------------------------------------------
 // Scheduling and status helpers

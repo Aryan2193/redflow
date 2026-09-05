@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { reducers, tables } from '../module_bindings';
 import { navigate } from '../App';
-import { rememberName, savedName } from '../lib/stdb';
+import { rememberName, rememberPendingEmail, savedName } from '../lib/stdb';
 import { useAutosize } from '../lib/autosize';
 
 const DEMO_ROOM = ((import.meta.env.VITE_DEMO_ROOM as string | undefined) ?? '').toUpperCase();
@@ -13,6 +13,7 @@ export default function Home() {
   const joinRoom = useReducer(reducers.joinRoom);
 
   const [name, setName] = useState(savedName());
+  const [email, setEmail] = useState('');
   const [question, setQuestion] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState<'open' | 'join' | null>(null);
@@ -42,6 +43,8 @@ export default function Home() {
     if (!name.trim()) return setError('Add your name so the room knows who is speaking.');
     if (question.trim().length < 8) return setError('Ask a fuller question. One or two sentences is right.');
     rememberName(name.trim());
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError('That does not look like an email. Leave it empty or fix it.');
+    rememberPendingEmail(email.trim());
     setBusy('open');
     waitingSince.current = myRooms.reduce<bigint>((m, r) => (r.id > m ? r.id : m), 0n);
     try {
@@ -60,6 +63,7 @@ export default function Home() {
     if (!name.trim()) return setError('Add your name so the room knows who is speaking.');
     if (c.length < 4) return setError('Room codes are four characters.');
     rememberName(name.trim());
+    rememberPendingEmail(email.trim());
     setBusy('join');
     try {
       await joinRoom({ code: c, name: name.trim() });
@@ -112,6 +116,18 @@ export default function Home() {
               className="w-full rounded-md border border-line bg-paper px-3 py-2.5 outline-none focus:border-ink"
               maxLength={32}
               autoComplete="nickname"
+            />
+          </label>
+          <label className="flex-1">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Email, optional</span>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="We send your room link"
+              className="w-full rounded-md border border-line bg-paper px-3 py-2.5 outline-none focus:border-ink"
+              maxLength={120}
+              autoComplete="email"
             />
           </label>
           <button

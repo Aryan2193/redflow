@@ -235,3 +235,10 @@ export const WatchdogSchedule = __t.object("WatchdogSchedule", {
 });
 export type WatchdogSchedule = __Infer<typeof WatchdogSchedule>;
 
+export const WelcomeSchedule = __t.object("WelcomeSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  requestId: __t.u64(),
+});
+export type WelcomeSchedule = __Infer<typeof WelcomeSchedule>;
+

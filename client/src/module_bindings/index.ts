@@ -41,6 +41,7 @@ import JoinRoomReducer from "./join_room_reducer";
 import LeaveRoomReducer from "./leave_room_reducer";
 import OpenRoomReducer from "./open_room_reducer";
 import PostNoteReducer from "./post_note_reducer";
+import RequestJoinEmailReducer from "./request_join_email_reducer";
 import RequestVerdictEmailReducer from "./request_verdict_email_reducer";
 import SetEmailProviderReducer from "./set_email_provider_reducer";
 import SetKillSwitchReducer from "./set_kill_switch_reducer";
@@ -280,6 +281,7 @@ const reducersSchema = __reducers(
   __reducerSchema("leave_room", LeaveRoomReducer),
   __reducerSchema("open_room", OpenRoomReducer),
   __reducerSchema("post_note", PostNoteReducer),
+  __reducerSchema("request_join_email", RequestJoinEmailReducer),
   __reducerSchema("request_verdict_email", RequestVerdictEmailReducer),
   __reducerSchema("set_email_provider", SetEmailProviderReducer),
   __reducerSchema("set_kill_switch", SetKillSwitchReducer),

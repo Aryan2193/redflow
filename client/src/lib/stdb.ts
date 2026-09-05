@@ -15,6 +15,26 @@ export function savedName(): string {
   }
 }
 
+// An email typed at the door travels with the person into the room, where the room link is sent to it once.
+const PENDING_EMAIL_KEY = 'redflow.pendingEmail';
+export function rememberPendingEmail(email: string) {
+  try {
+    if (email) localStorage.setItem(PENDING_EMAIL_KEY, email);
+    else localStorage.removeItem(PENDING_EMAIL_KEY);
+  } catch {
+    // storage unavailable
+  }
+}
+export function takePendingEmail(): string {
+  try {
+    const v = localStorage.getItem(PENDING_EMAIL_KEY) ?? '';
+    if (v) localStorage.removeItem(PENDING_EMAIL_KEY);
+    return v;
+  } catch {
+    return '';
+  }
+}
+
 export function rememberName(name: string) {
   try {
     localStorage.setItem(NAME_KEY, name);
