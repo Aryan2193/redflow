@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Draft, Evidence, ModelSlot, Note, Objection, Paragraph, TeamQuestion } from '../module_bindings/types';
+import type { Draft, Evidence, ModelSlot, Note, Objection, Paragraph } from '../module_bindings/types';
 import { changedShare, wordDiff } from '../lib/diff';
 import { TONE_BG, TONE_BUB, TONE_TEXT, evidenceState, objectionState, type Speaker } from '../lib/labels';
 import { causeOf, cleanHeading, cleanWhy, hostOf, splitSections, unquote, type BoutItem } from '../lib/bout';
@@ -16,7 +16,6 @@ export type CardCtx = {
   slots: readonly ModelSlot[];
   now: number;
   leadName: string;
-  onReply?: (t: TeamQuestion) => void;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -32,6 +31,15 @@ function ago(at: number, now: number): string {
   return `${Math.round(m / 60)}h`;
 }
 
+// The first sentence or two, cut at a sentence end. The rest waits behind See more.
+function gist(text: string, max = 150): string {
+  const plain = text.replace(/[#*_>`]/g, '').replace(/\s+/g, ' ').trim();
+  if (plain.length <= max) return plain;
+  const cut = plain.slice(0, max);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '));
+  return (end > max * 0.45 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, '') + '...').trim();
+}
+
 function Md({ children }: { children: string }) {
   return (
     <div className="chat-md">
@@ -41,7 +49,7 @@ function Md({ children }: { children: string }) {
 }
 
 // Text that writes itself in when the card is fresh.
-function LiveText({ text, live, md = true, className = '' }: { text: string; live: boolean; md?: boolean; className?: string }) {
+function LiveText({ text, live, md = false, className = '' }: { text: string; live: boolean; md?: boolean; className?: string }) {
   const { shown, done } = useReveal(text, live);
   return (
     <div className={`relative ${className}`}>
@@ -71,6 +79,14 @@ export function Avatar({ sp, size = 7 }: { sp: Speaker; size?: 6 | 7 }) {
     <span className={`inline-flex ${cls} shrink-0 items-center justify-center rounded-full font-bold text-paper ${TONE_BG[sp.tone]}`} aria-hidden>
       {sp.name.trim().charAt(0).toUpperCase() || '?'}
     </span>
+  );
+}
+
+function More({ open, onToggle, label = 'See more' }: { open: boolean; onToggle: () => void; label?: string }) {
+  return (
+    <button type="button" onClick={onToggle} className="mt-2 text-xs font-semibold text-ink-2 underline decoration-line hover:decoration-ink">
+      {open ? 'See less' : label}
+    </button>
   );
 }
 
@@ -120,10 +136,8 @@ export function summaryOf(item: BoutItem): string {
       return 'First answer, written alone';
     case 'draft':
       return item.again ? 'Drafted again' : 'Own answer, written blind';
-    case 'teamq':
-      return `Asks the team: ${item.t.text}`;
     case 'objection':
-      return `Objects to section ${item.o.targetOrdinal || '?'}: ${unquote(item.o.claim)}`;
+      return `Section ${item.o.targetOrdinal || '?'}: ${unquote(item.o.claim)}`;
     case 'evidence':
       return `Checked: ${unquote(item.e.claim)}`;
     case 'revision':
@@ -136,7 +150,7 @@ export function summaryOf(item: BoutItem): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Bodies
+// Bodies: a gist that reads in two seconds, everything else behind See more.
 // ---------------------------------------------------------------------------------------------
 
 function SectionChip({ cur, exists, flash }: { cur?: Paragraph; exists: boolean; flash: boolean }) {
@@ -153,7 +167,7 @@ function SectionChip({ cur, exists, flash }: { cur?: Paragraph; exists: boolean;
 function AnswerBody({ d, ctx, live }: { d: Draft; ctx: CardCtx; live: boolean }) {
   const v1 = ctx.paragraphs.filter(x => x.version === 1 && x.text).sort((a, b) => a.ordinal - b.ordinal);
   const secs = v1.length ? v1.map(p => ({ heading: cleanHeading(p.heading), body: p.text, ordinal: p.ordinal })) : splitSections(d.text).map((s, i) => ({ ...s, ordinal: i + 1 }));
-  const [all, setAll] = useState(false);
+  const [more, setMore] = useState(false);
   // A blow that lands flashes the section it hit.
   const prev = useRef<Record<number, string>>({});
   const [hits, setHits] = useState<Set<number>>(new Set());
@@ -175,84 +189,69 @@ function AnswerBody({ d, ctx, live }: { d: Draft; ctx: CardCtx; live: boolean })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
   const [first, ...rest] = secs;
+  const curOf = (ordinal: number) => ctx.paragraphs.find(p => p.current && p.ordinal === ordinal);
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-        <span>First full answer, written alone</span>
+      <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
+        <span>First answer, written alone</span>
         <span>{(d.latencyMs / 1000).toFixed(0)}s</span>
       </div>
       {first && (
         <section>
           <div className="mb-1 flex flex-wrap items-center gap-2">
             {first.heading && <h4 className="text-[15px] font-semibold leading-snug">{first.heading}</h4>}
-            <SectionChip cur={ctx.paragraphs.find(p => p.current && p.ordinal === first.ordinal)} exists={v1.length > 0} flash={hits.has(first.ordinal)} />
+            <SectionChip cur={curOf(first.ordinal)} exists={v1.length > 0} flash={hits.has(first.ordinal)} />
           </div>
-          <LiveText text={first.body} live={live} />
+          {more ? <Md>{first.body}</Md> : <LiveText text={gist(first.body, 220)} live={live} className="leading-relaxed" />}
         </section>
       )}
       {rest.length > 0 && (
-        <div className="mt-3 border-t border-black/10 pt-2">
-          {!all ? (
-            <ul className="space-y-1.5">
-              {rest.map(s => (
-                <li key={s.ordinal} className="flex flex-wrap items-center gap-2 text-[14px]">
-                  <span className="font-medium">{s.heading || `Section ${s.ordinal}`}</span>
-                  <SectionChip cur={ctx.paragraphs.find(p => p.current && p.ordinal === s.ordinal)} exists={v1.length > 0} flash={hits.has(s.ordinal)} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="card-scroll space-y-3">
-              {rest.map(s => (
-                <section key={s.ordinal}>
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <h4 className="text-[15px] font-semibold leading-snug">{s.heading || `Section ${s.ordinal}`}</h4>
-                    <SectionChip cur={ctx.paragraphs.find(p => p.current && p.ordinal === s.ordinal)} exists={v1.length > 0} flash={hits.has(s.ordinal)} />
-                  </div>
+        <ul className="mt-2.5 space-y-1.5 border-t border-black/10 pt-2">
+          {rest.map(s => (
+            <li key={s.ordinal}>
+              <div className="flex flex-wrap items-center gap-2 text-[14px]">
+                <span className="font-medium">{s.heading || `Section ${s.ordinal}`}</span>
+                <SectionChip cur={curOf(s.ordinal)} exists={v1.length > 0} flash={hits.has(s.ordinal)} />
+              </div>
+              {more && (
+                <div className="mt-1">
                   <Md>{s.body}</Md>
-                </section>
-              ))}
-            </div>
-          )}
-          <button type="button" onClick={() => setAll(v => !v)} className="mt-2 text-xs font-semibold text-ink-2 underline">
-            {all ? 'Show less' : `Read all ${secs.length} sections`}
-          </button>
-        </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
+      <More open={more} onToggle={() => setMore(v => !v)} label={`Read the full answer (${secs.length} sections)`} />
     </div>
   );
 }
 
 function DraftBody({ d, leadName, again, live }: { d: Draft; leadName: string; again: boolean; live: boolean }) {
-  const [first, ...rest] = splitSections(d.text);
-  const [all, setAll] = useState(false);
+  const secs = splitSections(d.text);
+  const [first, ...rest] = secs;
+  const [more, setMore] = useState(false);
   return (
     <div>
       <div className="mb-1.5 text-xs text-muted">{again ? 'Drafted again for this round' : `Own answer, written blind, before seeing ${leadName}'s`}</div>
       {first && (
         <>
           {first.heading && <h4 className="mb-1 text-[15px] font-semibold leading-snug">{first.heading}</h4>}
-          <LiveText text={first.body} live={live} />
+          {more ? <Md>{first.body}</Md> : <LiveText text={gist(first.body, 160)} live={live} className="leading-relaxed" />}
         </>
       )}
-      {rest.length > 0 && (
-        <div className="mt-2">
-          {all && (
-            <div className="card-scroll space-y-3">
-              {rest.map((s, i) => (
-                <section key={i}>
-                  {s.heading && <h4 className="mb-1 text-[15px] font-semibold leading-snug">{s.heading}</h4>}
-                  <Md>{s.body}</Md>
-                </section>
-              ))}
-              {d.assumptions && <p className="text-xs text-muted">Assumed: {d.assumptions.split('\n').join('; ')}</p>}
-            </div>
-          )}
-          <button type="button" onClick={() => setAll(v => !v)} className="mt-1 text-xs font-semibold text-ink-2 underline">
-            {all ? 'Show less' : `Read the full draft (${rest.length} more section${rest.length === 1 ? '' : 's'})`}
-          </button>
+      {more && rest.length > 0 && (
+        <div className="card-scroll mt-3 space-y-3">
+          {rest.map((s, i) => (
+            <section key={i}>
+              {s.heading && <h4 className="mb-1 text-[15px] font-semibold leading-snug">{s.heading}</h4>}
+              <Md>{s.body}</Md>
+            </section>
+          ))}
+          {d.assumptions && <p className="text-xs text-muted">Assumed: {d.assumptions.split('\n').join('; ')}</p>}
         </div>
       )}
+      {secs.length > 0 && <More open={more} onToggle={() => setMore(v => !v)} label={`Read the full draft (${secs.length} sections)`} />}
     </div>
   );
 }
@@ -261,6 +260,7 @@ function ObjectionBody({ o, ctx, live }: { o: Objection; ctx: CardCtx; live: boo
   const st = objectionState(o.status);
   const stamp = OBJ_STAMP[o.status] ?? OBJ_STAMP.open;
   const [issue, fix] = o.issue.split(' Fix: ');
+  const [more, setMore] = useState(false);
   const tail = o.resolution.split(' | ').pop() ?? '';
   let foot = '';
   if (o.status === 'withdrawn') foot = tail.replace(/^withdrawn:\s*/, '');
@@ -270,7 +270,7 @@ function ObjectionBody({ o, ctx, live }: { o: Objection; ctx: CardCtx; live: boo
   return (
     <div>
       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-        <span>Objects{o.targetOrdinal ? ` to section ${o.targetOrdinal}` : ''}</span>
+        <span>Section {o.targetOrdinal || '?'}</span>
         <Severity n={o.severity} />
         {o.severity === 3 && <span className="font-fight text-[12px] tracking-wider text-red">heavy</span>}
         <Stamp tone={stamp.tone} small className="ml-auto">
@@ -278,17 +278,24 @@ function ObjectionBody({ o, ctx, live }: { o: Objection; ctx: CardCtx; live: boo
         </Stamp>
       </div>
       {o.claim && (
-        <p className="mb-1.5 leading-relaxed">
+        <p className="leading-relaxed">
           <span className={`hl ${st.hl}`}>“{unquote(o.claim)}”</span>
         </p>
       )}
-      <LiveText text={issue} live={live} md={false} className="leading-relaxed" />
-      {fix && (
-        <p className="mt-1.5 leading-relaxed">
-          <span className="font-semibold">Fix:</span> {fix}
-        </p>
+      {more ? (
+        <div className="mt-1.5">
+          <p className="leading-relaxed">{issue}</p>
+          {fix && (
+            <p className="mt-1.5 leading-relaxed">
+              <span className="font-semibold">Fix:</span> {fix}
+            </p>
+          )}
+          {foot && <p className="mt-2 border-t border-black/10 pt-1.5 text-xs leading-relaxed text-ink-2">{foot}</p>}
+        </div>
+      ) : (
+        <LiveText text={gist(issue, 130)} live={live} className="mt-1.5 text-[14px] leading-relaxed text-ink-2" />
       )}
-      {foot && <p className="mt-2 border-t border-black/10 pt-1.5 text-xs leading-relaxed text-ink-2">{foot}</p>}
+      <More open={more} onToggle={() => setMore(v => !v)} />
     </div>
   );
 }
@@ -296,36 +303,43 @@ function ObjectionBody({ o, ctx, live }: { o: Objection; ctx: CardCtx; live: boo
 function EvidenceBody({ e, live }: { e: Evidence; live: boolean }) {
   const st = evidenceState(e.verdict);
   const stamp = EV_STAMP[e.verdict] ?? EV_STAMP.unclear;
+  const [more, setMore] = useState(false);
   return (
     <div>
       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>Checked on the web</span>
+        {e.url && (
+          <a href={e.url} target="_blank" rel="noreferrer" className="font-semibold text-ink-2 underline decoration-line">
+            {hostOf(e.url)}
+          </a>
+        )}
         <Stamp tone={stamp.tone} live={live} className="ml-auto">
           {stamp.text}
         </Stamp>
       </div>
-      <p className="mb-1.5 leading-relaxed">
+      <p className="leading-relaxed">
         <span className={`hl ${st.hl}`}>“{unquote(e.claim)}”</span>
       </p>
-      {e.title && <LiveText text={e.title} live={live} md={false} className="leading-relaxed" />}
-      {e.excerpt && <blockquote className="mt-1.5 border-l-2 border-line pl-2.5 text-[14px] italic leading-relaxed text-ink-2">“{unquote(e.excerpt)}”</blockquote>}
-      {e.url && (
-        <a href={e.url} target="_blank" rel="noreferrer" className="mt-1.5 inline-block text-xs font-semibold underline">
-          {hostOf(e.url)}
-        </a>
+      {more ? (
+        <div className="mt-1.5">
+          {e.title && <p className="leading-relaxed">{e.title}</p>}
+          {e.excerpt && <blockquote className="mt-1.5 border-l-2 border-line pl-2.5 text-[14px] italic leading-relaxed text-ink-2">“{unquote(e.excerpt)}”</blockquote>}
+        </div>
+      ) : (
+        e.title && <LiveText text={gist(e.title, 120)} live={live} className="mt-1.5 text-[14px] leading-relaxed text-ink-2" />
       )}
+      {(e.title || e.excerpt) && <More open={more} onToggle={() => setMore(v => !v)} />}
     </div>
   );
 }
 
 function RevisionBody({ item, ctx, live }: { item: Extract<BoutItem, { kind: 'revision' }>; ctx: CardCtx; live: boolean }) {
   const v = item.v;
-  const [diffOn, setDiffOn] = useState(true);
+  const [more, setMore] = useState(false);
   const edits = ctx.paragraphs.filter(p => p.version === v.version).sort((a, b) => a.ordinal - b.ordinal);
   const overruled = ctx.objections.filter(o => o.status === 'overruled' && o.round === v.round && o.resolution.startsWith('Overruled by the lead'));
   const label = (slot: string) => ctx.slots.find(s => s.slot === slot)?.label ?? slot;
   const prevOf = (p: Paragraph) => ctx.paragraphs.filter(x => x.ordinal === p.ordinal && x.version < p.version && x.text).sort((a, b) => b.version - a.version)[0];
-  const anyDiff = edits.some(p => p.text && prevOf(p));
   return (
     <div>
       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -333,113 +347,90 @@ function RevisionBody({ item, ctx, live }: { item: Extract<BoutItem, { kind: 're
         <Stamp tone="ink" small>
           Version {v.version}
         </Stamp>
-        {anyDiff && (
-          <button type="button" onClick={() => setDiffOn(x => !x)} className="ml-auto underline">
-            {diffOn ? 'Hide changes' : 'Show changes'}
-          </button>
-        )}
       </div>
-      <LiveText text={v.summary} live={live} md={false} className="font-medium leading-relaxed" />
+      <LiveText text={more ? v.summary : gist(v.summary, 170)} live={live} className="font-medium leading-relaxed" />
       {edits.length > 0 && (
-        <div className="card-scroll mt-3 space-y-2.5">
+        <ul className="mt-2.5 space-y-2">
           {edits.map(p => {
-            const prev = prevOf(p);
             const removed = !p.text;
             const cause = causeOf(p, ctx.objections, ctx.evidence, ctx.notes, ctx.slots);
-            const segs = prev && !removed ? wordDiff(prev.text, p.text) : null;
-            const useDiff = diffOn && segs && changedShare(segs) < 0.4;
+            const prev = prevOf(p);
+            const segs = more && prev && !removed ? wordDiff(prev.text, p.text) : null;
+            const useDiff = segs && changedShare(segs) < 0.4;
             return (
-              <section key={p.id.toString()} className="rounded-lg border border-black/10 bg-white/60 px-3 py-2.5">
+              <li key={p.id.toString()}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h4 className="text-[15px] font-semibold leading-snug">{removed ? `Removed: ${cleanHeading(p.heading)}` : cleanHeading(p.heading)}</h4>
                   <Stamp tone={cause.tone} small live={live}>
                     {cause.stamp}
                   </Stamp>
-                  <span className={`hl ${cause.hl} text-xs font-semibold`}>{cause.text}</span>
+                  <span className="text-[14px] font-semibold leading-snug">{removed ? `Removed: ${cleanHeading(p.heading)}` : cleanHeading(p.heading)}</span>
+                  <span className={`hl ${cause.hl} text-[11px] font-semibold`}>{cause.text}</span>
                 </div>
-                <p className="mt-0.5 text-xs leading-relaxed text-ink-2">{cleanWhy(p.why)}</p>
-                {!removed &&
-                  (useDiff && segs ? (
-                    <p className="mt-1.5 whitespace-pre-wrap text-[15px] leading-relaxed">
-                      {segs.map((s, i) =>
-                        s.type === 'same' ? <span key={i}>{s.text}</span> : <span key={i} className={s.type === 'add' ? 'diff-add' : 'diff-del'}>{s.text}</span>
-                      )}
-                    </p>
-                  ) : (
-                    <div className="mt-1.5">
-                      <Md>{p.text}</Md>
-                    </div>
-                  ))}
-              </section>
+                {more && (
+                  <div className="mt-1 rounded-lg border border-black/10 bg-white/60 px-3 py-2">
+                    <p className="text-xs leading-relaxed text-ink-2">{cleanWhy(p.why)}</p>
+                    {!removed &&
+                      (useDiff && segs ? (
+                        <p className="mt-1.5 whitespace-pre-wrap text-[15px] leading-relaxed">
+                          {segs.map((s, i) =>
+                            s.type === 'same' ? <span key={i}>{s.text}</span> : <span key={i} className={s.type === 'add' ? 'diff-add' : 'diff-del'}>{s.text}</span>
+                          )}
+                        </p>
+                      ) : (
+                        <div className="mt-1.5">
+                          <Md>{p.text}</Md>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
       {overruled.length > 0 && (
-        <ul className="mt-3 space-y-1.5 text-[14px] leading-relaxed">
+        <ul className="mt-2 space-y-1.5">
           {overruled.map(o => (
-            <li key={o.id.toString()} className="flex flex-wrap items-baseline gap-x-2">
+            <li key={o.id.toString()} className="flex flex-wrap items-baseline gap-x-2 text-[14px] leading-relaxed">
               <Stamp tone="judg" small live={live}>
                 Blocked
               </Stamp>
-              <span>
-                <span className="font-semibold">{label(o.bySlot)}.</span> {o.resolution.replace(/^Overruled by the lead:\s*/, '')}
-              </span>
+              <span className="font-semibold">{label(o.bySlot)}</span>
+              {more && <span className="text-ink-2">{o.resolution.replace(/^Overruled by the lead:\s*/, '')}</span>}
             </li>
           ))}
         </ul>
       )}
+      <More open={more} onToggle={() => setMore(v => !v)} label="See the changes" />
     </div>
   );
 }
 
 function RulingBody({ group, ctx, live }: { group: Objection[]; ctx: CardCtx; live: boolean }) {
   const label = (slot: string) => ctx.slots.find(s => s.slot === slot)?.label ?? slot;
+  const [more, setMore] = useState(false);
   return (
     <div>
       <div className="mb-1.5 text-xs text-muted">Ruling on the fixes</div>
-      <ul className="space-y-2 leading-relaxed">
+      <ul className="space-y-1.5 leading-relaxed">
         {group.map(o => {
           const tail = o.resolution.split(' | ').pop() ?? '';
           const ok = /^withdrawn:/.test(tail);
           const reason = tail.replace(/^(withdrawn|held):\s*/, '');
           return (
-            <li key={o.id.toString()} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <li key={o.id.toString()} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[14px]">
               <Stamp tone={ok ? 'ok' : 'red'} small live={live}>
                 {ok ? 'Fixed' : 'Still open'}
               </Stamp>
-              <span>
-                <span className="text-ink-2">
-                  {label(o.bySlot)}{o.targetOrdinal ? ` on section ${o.targetOrdinal}` : ''}.
-                </span>{' '}
-                {reason}
+              <span className="text-ink-2">
+                {label(o.bySlot)}{o.targetOrdinal ? `, section ${o.targetOrdinal}` : ''}
               </span>
+              {more && <span className="basis-full text-ink">{reason}</span>}
             </li>
           );
         })}
       </ul>
-    </div>
-  );
-}
-
-function TeamQBody({ t, ctx }: { t: TeamQuestion; ctx: CardCtx }) {
-  const answer = ctx.notes.find(n => n.teamQuestionId === t.id);
-  return (
-    <div>
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-warn">Asks the team</div>
-      <p className="leading-relaxed">
-        <span className="hl hl-warn">{t.text}</span>
-      </p>
-      {t.answeredAt ? (
-        <p className="mt-1.5 text-xs text-ink-2">
-          Answered by {t.answeredByName}
-          {answer ? `: ${t.answer || answer.text}` : ''}
-        </p>
-      ) : ctx.onReply ? (
-        <button type="button" onClick={() => ctx.onReply?.(t)} className="mt-2 rounded-full border border-warn px-2.5 py-0.5 text-xs font-semibold text-warn">
-          Reply
-        </button>
-      ) : null}
+      <More open={more} onToggle={() => setMore(v => !v)} label="See the reasons" />
     </div>
   );
 }
@@ -454,6 +445,7 @@ export default function ItemCard({ item, ctx, expanded, onToggle }: { item: Bout
   const enter = live ? (item.corner === 'left' ? 'enter-l' : item.corner === 'right' ? 'enter-r' : 'enter-c') : '';
 
   if (item.kind === 'typing') {
+    // The step itself; the activity feed above the corner narrates the moves inside it.
     return (
       <div className={`flex items-center gap-2 ${item.corner === 'right' ? 'flex-row-reverse text-right' : ''}`}>
         <Avatar sp={sp} size={6} />
@@ -497,18 +489,12 @@ export default function ItemCard({ item, ctx, expanded, onToggle }: { item: Bout
       {item.kind === 'question' && <div className="text-[16px] font-medium leading-snug">{item.q.text}</div>}
       {item.kind === 'note' && (
         <div>
-          {item.tq && (
-            <div className="mb-1 text-xs text-paper/70">
-              Answering {ctx.leadName}: <span className="italic">“{item.tq.text}”</span>
-            </div>
-          )}
           <div className="whitespace-pre-wrap leading-relaxed">{item.n.text}</div>
           {item.waiting && <div className="mt-1 text-[11px] text-paper/60">Read on the next turn</div>}
         </div>
       )}
       {item.kind === 'answer' && <AnswerBody d={item.d} ctx={ctx} live={live} />}
       {item.kind === 'draft' && <DraftBody d={item.d} leadName={ctx.leadName} again={item.again} live={live} />}
-      {item.kind === 'teamq' && <TeamQBody t={item.t} ctx={ctx} />}
       {item.kind === 'objection' && <ObjectionBody o={item.o} ctx={ctx} live={live} />}
       {item.kind === 'evidence' && <EvidenceBody e={item.e} live={live} />}
       {item.kind === 'revision' && <RevisionBody item={item} ctx={ctx} live={live} />}

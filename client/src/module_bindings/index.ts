@@ -54,6 +54,7 @@ import WrapUpReducer from "./wrap_up_reducer";
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import AgentEventRow from "./agent_event_table";
 import AgentStatusRow from "./agent_status_table";
 import AnswerVersionRow from "./answer_version_table";
 import DraftRow from "./draft_table";
@@ -71,6 +72,20 @@ import TeamQuestionRow from "./team_question_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  agentEvent: __table({
+    name: 'agent_event',
+    indexes: [
+      { accessor: 'id', name: 'agent_event_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'questionId', name: 'agent_event_question_id_idx_btree', algorithm: 'btree', columns: [
+        'questionId',
+      ] },
+    ],
+    constraints: [
+      { name: 'agent_event_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, AgentEventRow),
   agentStatus: __table({
     name: 'agent_status',
     indexes: [
@@ -282,6 +297,8 @@ const proceduresSchema = __procedures(
 
 type __SchemaWithTableAccessorAliases = Omit<typeof tablesSchema.schemaType, "tables"> & {
   tables: typeof tablesSchema.schemaType.tables & {
+    /** @deprecated Use `agentEvent` instead. This alias will be removed in the next major version. */
+    readonly "agent_event": Omit<typeof tablesSchema.schemaType.tables["agentEvent"], "accessorName"> & { readonly accessorName: "agent_event" };
     /** @deprecated Use `agentStatus` instead. This alias will be removed in the next major version. */
     readonly "agent_status": Omit<typeof tablesSchema.schemaType.tables["agentStatus"], "accessorName"> & { readonly accessorName: "agent_status" };
     /** @deprecated Use `answerVersion` instead. This alias will be removed in the next major version. */
@@ -308,6 +325,7 @@ const REMOTE_MODULE = {
 >;
 
 const tableAccessorAliases = {
+  "agent_event": "agentEvent",
   "agent_status": "agentStatus",
   "answer_version": "answerVersion",
   "model_slot": "modelSlot",
@@ -332,6 +350,8 @@ function __withTableAccessorAliases<T extends object>(target: T, freeze = false)
 
 type __DbViewBase = __DbConnectionImpl<typeof REMOTE_MODULE>["db"];
 export type DbView = __DbViewBase & {
+  /** @deprecated Use `agentEvent` instead. This alias will be removed in the next major version. */
+  readonly "agent_event": __DbViewBase["agentEvent"];
   /** @deprecated Use `agentStatus` instead. This alias will be removed in the next major version. */
   readonly "agent_status": __DbViewBase["agentStatus"];
   /** @deprecated Use `answerVersion` instead. This alias will be removed in the next major version. */
@@ -344,6 +364,8 @@ export type DbView = __DbViewBase & {
 
 type __TablesBase = __QueryBuilder<typeof tablesSchema.schemaType>;
 export type Tables = __TablesBase & {
+  /** @deprecated Use `agentEvent` instead. This alias will be removed in the next major version. */
+  readonly "agent_event": __TablesBase["agentEvent"];
   /** @deprecated Use `agentStatus` instead. This alias will be removed in the next major version. */
   readonly "agent_status": __TablesBase["agentStatus"];
   /** @deprecated Use `answerVersion` instead. This alias will be removed in the next major version. */

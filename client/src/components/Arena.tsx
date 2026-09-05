@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AgentStatus, AnswerVersion, Draft, Evidence, ModelSlot, Note, Objection, Paragraph, Question, Room, TeamQuestion } from '../module_bindings/types';
+import type { AgentEvent, AgentStatus, AnswerVersion, Draft, Evidence, ModelSlot, Note, Objection, Paragraph, Question, Room } from '../module_bindings/types';
 import { ACTIVE_STATES, ROUNDS, buildBout, cornerOf, roundIndex, type BoutItem, type Corner } from '../lib/bout';
 import { TONE_TEXT, speakerFor } from '../lib/labels';
 import { useMediaQuery } from '../lib/reveal';
+import Activity from './Activity';
 import ItemCard, { type CardCtx } from './Cards';
 import Verdict from './Verdict';
 
@@ -14,25 +15,25 @@ type Props = {
   objections: readonly Objection[];
   evidence: readonly Evidence[];
   paragraphs: readonly Paragraph[];
-  teamQs: readonly TeamQuestion[];
   versions: readonly AnswerVersion[];
   statuses: readonly AgentStatus[];
+  events: readonly AgentEvent[];
   slots: readonly ModelSlot[];
   now: number;
   myName: string;
-  onReply: (t: TeamQuestion) => void;
 };
 
 // How many of the newest cards in a column stay open. Everything older folds to one line.
 // The lead's cards are long (a full answer, a full comeback), so its corner shows one at a time.
 const OPEN_PER_CORNER: Record<Corner, number> = { left: 1, center: 2, right: 2 };
+const CORNER_SLOTS: Record<Corner, string[]> = { left: ['council_a', 'chair'], right: ['council_b', 'council_c'], center: ['checker'] };
 
 function CornerHeader({ corner, slots, statuses }: { corner: Corner; slots: readonly ModelSlot[]; statuses: readonly AgentStatus[] }) {
   const fighters = slots.filter(s => s.enabled && s.slot.startsWith('council') && cornerOf(s.slot) === corner);
   const busy = statuses.some(s => ACTIVE_STATES.has(s.state) && cornerOf(s.slot) === corner);
   const right = corner === 'right';
   return (
-    <div className={`flex items-baseline gap-2 px-1 pb-1.5 ${right ? 'flex-row-reverse text-right' : ''}`}>
+    <div className={`flex items-baseline gap-2 px-1 pb-1 ${right ? 'flex-row-reverse text-right' : ''}`}>
       <div className="flex items-baseline gap-2">
         {fighters.map((s, i) => {
           const sp = speakerFor(s.slot, slots);
@@ -104,8 +105,8 @@ export default function Arena(p: Props) {
   const leadName = p.slots.find(s => s.slot === 'council_a')?.label ?? 'The lead';
 
   const items = useMemo(
-    () => buildBout({ question: q, notes: p.notes, drafts: p.drafts, objections: p.objections, evidence: p.evidence, teamQs: p.teamQs, versions: p.versions, statuses: p.statuses, slots: p.slots }),
-    [q, p.notes, p.drafts, p.objections, p.evidence, p.teamQs, p.versions, p.statuses, p.slots]
+    () => buildBout({ question: q, notes: p.notes, drafts: p.drafts, objections: p.objections, evidence: p.evidence, versions: p.versions, statuses: p.statuses, slots: p.slots }),
+    [q, p.notes, p.drafts, p.objections, p.evidence, p.versions, p.statuses, p.slots]
   );
   const question = items.find(i => i.kind === 'question');
   const byCorner = useMemo(() => {
@@ -143,7 +144,7 @@ export default function Arena(p: Props) {
     return () => clearTimeout(t);
   }, [idx]);
 
-  const ctx: CardCtx = { paragraphs: p.paragraphs, objections: p.objections, evidence: p.evidence, notes: p.notes, slots: p.slots, now: p.now, leadName, onReply: p.onReply };
+  const ctx: CardCtx = { paragraphs: p.paragraphs, objections: p.objections, evidence: p.evidence, notes: p.notes, slots: p.slots, now: p.now, leadName };
   const openRisks = p.objections.filter(o => o.status === 'unresolved').length;
 
   const verdict = settled ? (
@@ -163,8 +164,10 @@ export default function Arena(p: Props) {
 
   if (!wide) {
     // One column on a phone: cards lean to their corner, the ring runs down the middle.
+    const all = [...CORNER_SLOTS.left, ...CORNER_SLOTS.right, ...CORNER_SLOTS.center];
     return (
-      <div className="relative min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <Activity slots={all} events={p.events} statuses={p.statuses} max={3} />
         <Column items={items} ctx={ctx} isOpen={k => (k === 'q' ? true : isOpen(k))} toggle={toggle} tint="transparent" className="h-full" footer={verdict} lean />
         {bannerNode}
       </div>
@@ -180,14 +183,16 @@ export default function Arena(p: Props) {
     <div className="arena relative mx-auto grid min-h-0 w-full max-w-[1400px] min-w-0 flex-1 gap-3 overflow-hidden px-3 pb-2 sm:px-5" style={{ gridTemplateColumns: cols }}>
       <div className={`flex min-h-0 min-w-0 flex-col ${settled ? 'opacity-80' : ''}`}>
         <CornerHeader corner="left" slots={p.slots} statuses={p.statuses} />
+        <Activity slots={CORNER_SLOTS.left} events={p.events} statuses={p.statuses} />
         <Column items={byCorner.left} ctx={ctx} isOpen={isOpen} toggle={toggle} tint={tintL} />
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-col">
-        <div className="flex items-baseline justify-between px-1 pb-1.5">
+        <div className="flex items-baseline justify-between px-1 pb-1">
           <span className="font-fight text-[22px] leading-none tracking-wide text-ink">The ring</span>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">{settled ? (openRisks ? `decided, ${openRisks} open` : 'decided') : 'referee and ringside'}</span>
         </div>
+        <Activity slots={CORNER_SLOTS.center} events={p.events} statuses={p.statuses} max={3} />
         {question && question.kind === 'question' && (
           <div className="mb-2 shrink-0">
             <QuestionCard item={question} />
@@ -198,6 +203,7 @@ export default function Arena(p: Props) {
 
       <div className={`flex min-h-0 min-w-0 flex-col ${settled ? 'opacity-80' : ''}`}>
         <CornerHeader corner="right" slots={p.slots} statuses={p.statuses} />
+        <Activity slots={CORNER_SLOTS.right} events={p.events} statuses={p.statuses} align="right" />
         <Column items={byCorner.right} ctx={ctx} isOpen={isOpen} toggle={toggle} tint={tintR} />
       </div>
 

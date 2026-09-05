@@ -1,5 +1,5 @@
 // The bout: every event about one question, assigned to a corner of the ring and a round.
-import type { AgentStatus, AnswerVersion, Draft, Evidence, ModelSlot, Note, Objection, Paragraph, Question, TeamQuestion } from '../module_bindings/types';
+import type { AgentStatus, AnswerVersion, Draft, Evidence, ModelSlot, Note, Objection, Paragraph, Question } from '../module_bindings/types';
 import { toDate } from './stdb';
 import { humanSpeaker, speakerFor, type Speaker } from './labels';
 
@@ -10,10 +10,9 @@ type Base = { key: string; at: number; corner: Corner; stage: Stage; round: numb
 export type BoutItem = Base &
   (
     | { kind: 'question'; q: Question }
-    | { kind: 'note'; n: Note; tq?: TeamQuestion; waiting: boolean }
+    | { kind: 'note'; n: Note; waiting: boolean }
     | { kind: 'answer'; d: Draft }
     | { kind: 'draft'; d: Draft; again: boolean }
-    | { kind: 'teamq'; t: TeamQuestion }
     | { kind: 'objection'; o: Objection }
     | { kind: 'evidence'; e: Evidence }
     | { kind: 'revision'; v: AnswerVersion }
@@ -113,7 +112,6 @@ export type BoutInput = {
   drafts: readonly Draft[];
   objections: readonly Objection[];
   evidence: readonly Evidence[];
-  teamQs: readonly TeamQuestion[];
   versions: readonly AnswerVersion[];
   statuses: readonly AgentStatus[];
   slots: readonly ModelSlot[];
@@ -129,18 +127,13 @@ export function buildBout(p: BoutInput): BoutItem[] {
   out.push({ kind: 'question', key: 'q', at: at(q.createdAt), corner: 'center', stage: '', round: 1, speaker: humanSpeaker(q.askedByName), q });
 
   for (const n of p.notes) {
-    const tq = n.teamQuestionId !== 0n ? p.teamQs.find(t => t.id === n.teamQuestionId) : undefined;
-    out.push({ kind: 'note', key: 'n' + n.id, at: at(n.createdAt), corner: 'center', stage: '', round: 0, speaker: humanSpeaker(n.authorName), n, tq, waiting: n.consumedStep === '' && !settled && !tq });
+    out.push({ kind: 'note', key: 'n' + n.id, at: at(n.createdAt), corner: 'center', stage: '', round: 0, speaker: humanSpeaker(n.authorName), n, waiting: n.consumedStep === '' && !settled });
   }
 
   for (const d of p.drafts) {
     const isLead = d.slot === 'council_a';
     if (isLead && d.round === 1) out.push({ kind: 'answer', key: 'd' + d.id, at: at(d.createdAt), corner: 'left', stage: 'opening', round: d.round, speaker: lead, d });
     else out.push({ kind: 'draft', key: 'd' + d.id, at: at(d.createdAt), corner: cornerOf(d.slot), stage: 'opening', round: d.round, speaker: speakerFor(d.slot, p.slots), d, again: d.round > 1 });
-  }
-
-  for (const t of p.teamQs) {
-    out.push({ kind: 'teamq', key: 't' + t.id, at: at(t.createdAt) + 1, corner: 'center', stage: '', round: 0, speaker: lead, t });
   }
 
   for (const o of p.objections) {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { reducers, tables } from '../module_bindings';
-import type { Question, TeamQuestion } from '../module_bindings/types';
+import type { Question } from '../module_bindings/types';
 import { idHex, rememberName, savedName, toDate } from '../lib/stdb';
 import Arena from '../components/Arena';
 import Composer from '../components/Composer';
@@ -20,7 +20,6 @@ export default function Room({ code }: { code: string }) {
   const [members] = useTable(tables.member.where(r => r.roomId.eq(roomId)), { enabled });
   const [questions] = useTable(tables.question.where(r => r.roomId.eq(roomId)), { enabled });
   const [notes] = useTable(tables.note.where(r => r.roomId.eq(roomId)), { enabled });
-  const [teamQs] = useTable(tables.teamQuestion.where(r => r.roomId.eq(roomId)), { enabled });
   const [slots] = useTable(tables.modelSlot);
 
   const ordered = useMemo(() => [...questions].sort((a, b) => Number(a.id - b.id)), [questions]);
@@ -39,6 +38,7 @@ export default function Room({ code }: { code: string }) {
   const [evidence] = useTable(tables.evidence.where(r => r.questionId.eq(qid)), { enabled: qEnabled });
   const [drafts] = useTable(tables.draft.where(r => r.questionId.eq(qid)), { enabled: qEnabled });
   const [statuses] = useTable(tables.agentStatus.where(r => r.questionId.eq(qid)), { enabled: qEnabled });
+  const [events] = useTable(tables.agentEvent.where(r => r.questionId.eq(qid)), { enabled: qEnabled });
   const [versions] = useTable(tables.answerVersion.where(r => r.questionId.eq(qid)), { enabled: qEnabled });
 
   const me = idHex(identity);
@@ -58,7 +58,6 @@ export default function Room({ code }: { code: string }) {
 
   const [copied, setCopied] = useState(false);
   const [explain, setExplain] = useState(false);
-  const [replyTo, setReplyTo] = useState<TeamQuestion | null>(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 5000);
@@ -116,7 +115,6 @@ export default function Room({ code }: { code: string }) {
   }
 
   const online = members.filter(m => m.online);
-  const openTeamQs = question ? teamQs.filter(t => t.questionId === question.id && !t.answeredAt) : [];
   const queued = question ? notes.filter(n => n.questionId === question.id && n.consumedStep === '' && n.teamQuestionId === 0n).length : 0;
   const openRisks = objections.filter(o => o.status === 'unresolved').length;
   const justJoined = now - toDate(myMember.joinedAt).getTime() < 120_000;
@@ -202,17 +200,16 @@ export default function Room({ code }: { code: string }) {
           room={room}
           question={question}
           notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
-          teamQs={teamQs.filter(t => t.questionId === question.id)}
           drafts={drafts}
           objections={objections}
           evidence={evidence}
           paragraphs={paragraphs}
           versions={versions}
           statuses={statuses}
+          events={events}
           slots={slots}
           now={now}
           myName={myMember.name}
-          onReply={setReplyTo}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center px-5 text-center">
@@ -223,7 +220,7 @@ export default function Room({ code }: { code: string }) {
         </div>
       )}
 
-      <Composer room={room} question={latest} openTeamQs={openTeamQs} queued={queued} slots={slots} replyTo={replyTo} onReplyTo={setReplyTo} onSent={() => setViewQid(null)} />
+      <Composer room={room} question={latest} queued={queued} onSent={() => setViewQid(null)} />
     </div>
   );
 }
