@@ -17,7 +17,9 @@ export default function Home() {
   const [error, setError] = useState('');
 
   // Rooms I created, so we can jump into the new one as soon as it exists.
-  const [myRooms] = useTable(tables.room.where(r => r.createdBy.eq(identity!)), { enabled: !!identity });
+  // The filter is only meaningful once we know who we are; before that, subscribe to nothing.
+  const myRoomsQuery = identity ? tables.room.where(r => r.createdBy.eq(identity)) : tables.room.where(r => r.id.eq(0n));
+  const [myRooms] = useTable(myRoomsQuery, { enabled: !!identity });
   const waitingSince = useRef<bigint | null>(null);
 
   useEffect(() => {

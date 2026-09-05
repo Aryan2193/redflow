@@ -1,7 +1,28 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState, type ReactNode } from 'react';
 import { useSpacetimeDB } from 'spacetimedb/react';
 import Home from './pages/Home';
 import Room from './pages/Room';
+
+class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <main className="mx-auto max-w-md px-5 pt-24 text-center">
+          <p className="font-display text-2xl">Something broke on this screen.</p>
+          <p className="mt-2 text-sm text-muted">{String(this.state.error.message).slice(0, 200)}</p>
+          <button onClick={() => (window.location.href = '/')} className="mt-6 rounded-md bg-ink px-4 py-2 font-semibold text-paper">
+            Back to the start
+          </button>
+        </main>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function parsePath(path: string): { page: 'home' } | { page: 'room'; code: string } {
   const m = path.match(/^\/r\/([A-Za-z0-9]{4,8})\/?$/);
@@ -31,7 +52,7 @@ export default function App() {
           {connectionError ? 'Connection lost. Reconnecting.' : 'Connecting to the room.'}
         </div>
       )}
-      {route.page === 'home' ? <Home /> : <Room code={route.code} />}
+      <Boundary key={route.page === 'room' ? route.code : 'home'}>{route.page === 'home' ? <Home /> : <Room code={route.code} />}</Boundary>
     </div>
   );
 }
