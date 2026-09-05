@@ -29,6 +29,7 @@ export default function Stream(p: Props) {
   const postNote = useReducer(reducers.postNote);
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
+  const [hint, setHint] = useState('');
   const [sending, setSending] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -180,6 +181,7 @@ export default function Stream(p: Props) {
       if (canAsk) await ask({ roomId: p.room.id, text: body });
       else await postNote({ roomId: p.room.id, text: body, teamQuestionId: 0n });
       setText('');
+      setHint(!canAsk && q && q.state === 'settled' ? 'The answer has settled. Press Go deeper on the Answer tab to make the room take this into account.' : '');
     } catch (e2) {
       setErr(String((e2 as Error)?.message ?? e2));
     } finally {
@@ -240,6 +242,7 @@ export default function Stream(p: Props) {
           </button>
         </div>
         {err && <div className="mt-1.5 text-xs text-red">{err}</div>}
+        {hint && !err && <div className="mt-1.5 text-xs text-warn">{hint}</div>}
         <div className="mt-1.5 text-xs text-muted">
           {p.members.filter(m => m.online).map(m => m.name).join(', ') || 'Nobody else here yet'}
         </div>

@@ -199,13 +199,15 @@ export default function Answer(p: Props) {
           {current.map(para => {
             const prev = previousOf(para);
             const isOpen = open === para.id;
-            const fresh = p.now - toDate(para.createdAt).getTime() < 6000;
+            // A paragraph that just changed shows its word-level diff for a few seconds without being tapped.
+            const fresh = p.now - toDate(para.createdAt).getTime() < 9000 && para.version > 1;
+            const showDiff = !!prev && (isOpen || fresh);
             return (
               <li key={para.id.toString()} className={`relative rounded-md ${fresh ? 'landed' : ''}`}>
                 <div className={`absolute inset-y-1 left-0 w-1 rounded ${STATUS_BAR[para.status] ?? 'bg-judg'}`} aria-hidden />
                 <button onClick={() => setOpen(isOpen ? null : para.id)} className="block w-full pl-4 text-left">
                   <p className="answer-text">
-                    {isOpen && prev ? (
+                    {showDiff && prev ? (
                       wordDiff(prev.text, para.text).map((s, i) =>
                         s.type === 'same' ? <span key={i}>{s.text}</span> : <span key={i} className={s.type === 'add' ? 'diff-add' : 'diff-del'}>{s.text}</span>
                       )
