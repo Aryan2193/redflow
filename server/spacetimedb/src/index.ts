@@ -688,14 +688,44 @@ function allNotes(db: Db, questionId: bigint) {
 
 type ModelCall = { ok: boolean; json: any; raw: string; status: number; servedBy: string; latencyMs: number; error: string; annotations: any[] };
 
+// Models that write markdown inside JSON strings leave raw line breaks and tabs in them, which JSON forbids.
+// Walk the text and escape control characters that sit inside string literals; strip fences and trailing commas.
 function repairJson(text: string): string {
   let s = text.trim();
   s = s.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
   const first = s.indexOf('{');
   const last = s.lastIndexOf('}');
   if (first >= 0 && last > first) s = s.slice(first, last + 1);
-  s = s.replace(/,\s*([}\]])/g, '$1');
-  return s;
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) {
+        out += c;
+        esc = false;
+      } else if (c === '\\') {
+        out += c;
+        esc = true;
+      } else if (c === '"') {
+        inStr = false;
+        out += c;
+      } else if (c === '\n') {
+        out += '\\n';
+      } else if (c === '\r') {
+        // dropped
+      } else if (c === '\t') {
+        out += '\\t';
+      } else {
+        out += c;
+      }
+    } else {
+      if (c === '"') inStr = true;
+      out += c;
+    }
+  }
+  return out.replace(/,\s*([}\]])/g, '$1');
 }
 
 function callModel(
@@ -722,11 +752,14 @@ function callModel(
       },
       { role: 'user', content: user },
     ],
-    max_tokens: maxTokens + 1400,
+    // Long, sectioned answers run to 3,000 output tokens. A cut-off answer is invalid JSON, so leave real headroom.
+    // Cost follows tokens used, not the cap.
+    max_tokens: maxTokens + 4000,
     temperature: 0.5,
     provider: slotRow.slot === LEAD || slotRow.slot === 'chair' ? { require_parameters: !promptJson } : { require_parameters: !promptJson, sort: 'latency' },
   };
   if (!promptJson) body.response_format = { type: 'json_schema', json_schema: { name: 'redflow', strict: true, schema: jsonSchema } };
+  else if (/^(anthropic|openai)\//.test(slotRow.model)) body.response_format = { type: 'json_object' };
   const effort = (slotRow.reasoning || '').trim();
   if (effort === 'none') body.reasoning = { exclude: true, max_tokens: 64 };
   else if (effort) body.reasoning = { effort };
@@ -761,11 +794,13 @@ function callModel(
   const msg = data.choices?.[0]?.message ?? {};
   const servedBy = String(data.model ?? slotRow.model) + (data.provider ? ' via ' + String(data.provider) : '');
   const content = String(msg.content ?? '');
+  const finish = String(data.choices?.[0]?.finish_reason ?? '');
   let json: any = null;
   try {
     json = JSON.parse(repairJson(content));
   } catch {
-    return { ok: false, json: null, raw, status, servedBy, latencyMs, error: 'model returned invalid json', annotations: [] };
+    const why = finish === 'length' ? `output cut off at ${data.usage?.completion_tokens ?? '?'} tokens` : 'model returned invalid json';
+    return { ok: false, json: null, raw, status, servedBy, latencyMs, error: why, annotations: [] };
   }
   return { ok: true, json, raw, status, servedBy, latencyMs, error: '', annotations: Array.isArray(msg.annotations) ? msg.annotations : [] };
 }
@@ -931,10 +966,14 @@ function failStep(ctx: any, arg: any, load: any, error: string) {
       }
       settleFromVerify(tx, q.id, load.slots);
     } else {
-      // The chair failed for good. Publish what exists and settle so the room is never stuck.
+      // The lead failed for good at revising. Publish what exists, mark what it could not handle as open risks, and settle.
       const qq = tx.db.question.id.find(q.id)!;
       if (qq.version === 0) promoteDraftToVersionOne(tx, qq, 'The lead model was unavailable. Showing the strongest draft as is.');
-      settle(tx, q.id, 'chair unavailable');
+      for (const o of openObjections(tx.db, q.id)) tx.db.objection.id.update({ ...o, status: 'unresolved', resolution: 'The lead could not revise in time. Left open for the team.', updatedAt: tx.timestamp });
+      for (const p of currentParagraphs(tx.db, q.id)) {
+        if ([...tx.db.objection.questionId.filter(q.id)].find(o => o.status === 'unresolved' && o.targetOrdinal === p.ordinal)) tx.db.paragraph.id.update({ ...p, status: 'unresolved' });
+      }
+      settle(tx, q.id, 'lead could not revise');
     }
   });
   return {};
