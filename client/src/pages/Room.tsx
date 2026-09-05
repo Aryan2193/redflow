@@ -76,7 +76,9 @@ export default function Room({ code }: { code: string }) {
     [slots]
   );
 
-  if (roomsReady && !room) {
+  // Only declare a room missing on a live connection with the room subscription applied.
+  // During a reconnect the cache can be empty while "ready" is still true from the previous session.
+  if (isActive && roomsReady && !room) {
     return (
       <main className="mx-auto max-w-md px-5 pt-24 text-center">
         <p className="font-display text-2xl">No room with the code {code}.</p>
