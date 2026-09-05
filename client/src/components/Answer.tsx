@@ -4,6 +4,7 @@ import { reducers } from '../module_bindings';
 import type { AgentStatus, AnswerVersion, Draft, Evidence, ModelSlot, Objection, Paragraph, Question, Room, TeamQuestion } from '../module_bindings/types';
 import { wordDiff } from '../lib/diff';
 import { timeAgo, toDate } from '../lib/stdb';
+import { renderShareCard, shareOrDownload } from '../lib/shareCard';
 
 type Props = {
   room: Room;
@@ -80,6 +81,28 @@ export default function Answer(p: Props) {
   const [emailState, setEmailState] = useState<'idle' | 'sent' | 'error'>('idle');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [err, setErr] = useState('');
+  const [shareState, setShareState] = useState<'idle' | 'working' | 'shared' | 'downloaded' | 'copied'>('idle');
+
+  async function share() {
+    if (!q) return;
+    setShareState('working');
+    try {
+      const blob = await renderShareCard({
+        room: p.room,
+        question: q,
+        paragraphs: [...p.paragraphs],
+        objections: p.objections,
+        models: p.slots.filter(s => s.slot.startsWith('council')).map(s => s.label),
+        siteUrl: window.location.origin.includes('127.0.0.1') || window.location.origin.includes('localhost') ? '' : window.location.origin,
+      });
+      const result = await shareOrDownload(blob, `redflow-${p.room.code}-v${q.version}.png`);
+      setShareState(result);
+      setTimeout(() => setShareState('idle'), 3000);
+    } catch (e) {
+      setShareState('idle');
+      setErr(String((e as Error)?.message ?? e));
+    }
+  }
 
   const current = useMemo(() => p.paragraphs.filter(x => x.current).sort((a, b) => a.ordinal - b.ordinal), [p.paragraphs]);
   const previousOf = (para: Paragraph) =>
@@ -253,6 +276,11 @@ export default function Answer(p: Props) {
         {firstDraft && current.length > 0 && (
           <button onClick={() => setShowBefore(v => !v)} className="rounded-md border border-line bg-sheet px-3 py-2 text-sm">
             {showBefore ? 'Hide' : 'Show'} what one model said first
+          </button>
+        )}
+        {current.length > 0 && (
+          <button onClick={share} disabled={shareState === 'working'} className="rounded-md border border-line bg-sheet px-3 py-2 text-sm disabled:opacity-50">
+            {shareState === 'working' ? 'Rendering' : shareState === 'copied' ? 'Copied to clipboard' : shareState === 'downloaded' ? 'Saved' : shareState === 'shared' ? 'Shared' : 'Share as image'}
           </button>
         )}
       </div>

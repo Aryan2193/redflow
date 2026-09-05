@@ -4,6 +4,8 @@ import { reducers, tables } from '../module_bindings';
 import { navigate } from '../App';
 import { rememberName, savedName } from '../lib/stdb';
 
+const DEMO_ROOM = ((import.meta.env.VITE_DEMO_ROOM as string | undefined) ?? '').toUpperCase();
+
 export default function Home() {
   const { identity, isActive } = useSpacetimeDB();
   const createRoom = useReducer(reducers.createRoom);
@@ -145,6 +147,15 @@ export default function Home() {
       </div>
 
       {error && <p className="mt-4 rounded-md bg-red-soft px-3 py-2 text-sm text-red">{error}</p>}
+
+      {DEMO_ROOM && (
+        <p className="mt-5 text-sm text-ink-2">
+          Not sure yet? Step into the room we are running tonight and watch it work:{' '}
+          <button onClick={() => navigate(`/r/${DEMO_ROOM}`)} className="font-mono font-semibold tracking-[0.15em] text-ink underline">
+            {DEMO_ROOM}
+          </button>
+        </p>
+      )}
 
       <section className="mt-12 grid gap-4 text-sm text-ink-2 sm:grid-cols-3">
         <div>
