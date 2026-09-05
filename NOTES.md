@@ -29,3 +29,7 @@
 ## Next
 - Verify model slugs. Build client (join, room, answer/room tabs, agent status, ledger). Test full loop locally. Then Maincloud publish as `redflow`.
 - Deferred: email (Resend/Apps Script) ~22:00; domain + hosting at deploy.
+
+## Rule learned 18:25
+- After ANY schema change: `spacetime generate` again, or the client binary reader throws RangeError on the changed table. Bindings live in client/src/module_bindings.
+- First full loop settled 18:24: ask 18:19:25, v1 ~18:20:00 (drafts 5-7s each, serial), settled ~18:24:20 with v2, 5 withdrawn, 3 unresolved, 1 uncaused edit refused, 1 web check (unclear). Whole round ~5 min; target under 3. Critic JSON failures (DeepSeek reasoning) cost ~40s; headroom raised to +1400 tokens.

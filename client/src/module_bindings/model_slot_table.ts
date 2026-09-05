@@ -17,4 +17,5 @@ export default __t.row({
   providerId: __t.u32().name("provider_id"),
   useWeb: __t.bool().name("use_web"),
   enabled: __t.bool(),
+  reasoning: __t.string(),
 });

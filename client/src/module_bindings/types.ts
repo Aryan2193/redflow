@@ -99,6 +99,7 @@ export const ModelSlot = __t.object("ModelSlot", {
   providerId: __t.u32(),
   useWeb: __t.bool(),
   enabled: __t.bool(),
+  reasoning: __t.string(),
 });
 export type ModelSlot = __Infer<typeof ModelSlot>;
 

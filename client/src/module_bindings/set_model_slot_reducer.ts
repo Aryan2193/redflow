@@ -16,4 +16,5 @@ export default {
   label: __t.string(),
   providerId: __t.u32(),
   useWeb: __t.bool(),
+  reasoning: __t.string(),
 };
