@@ -206,6 +206,12 @@ export default function Stream(p: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {justJoined && myMember && (
+        <div className="shrink-0 border-b border-line-2 bg-warn-soft/60 px-4 py-2 text-sm text-ink-2">
+          <span className="font-semibold text-ink">Welcome, {myMember.name}.</span>{' '}
+          {q ? 'A question is on the table. Add context or a correction below and the agents read it on their next turn.' : 'Ask the room one question below. Three models answer it blind, then argue.'}
+        </div>
+      )}
       <div
         ref={listRef}
         onScroll={e => {
@@ -214,12 +220,6 @@ export default function Stream(p: Props) {
         }}
         className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 pt-4"
       >
-        {justJoined && myMember && (
-          <div className="rounded-lg bg-warn-soft/60 px-3 py-2 text-sm text-ink-2">
-            <span className="font-semibold text-ink">Welcome, {myMember.name}.</span> This room is deciding: {p.room.title}.{' '}
-            {q ? 'A question is already on the table. Add context or a correction below and the agents read it on their next turn.' : 'Ask the room one question below. Three models answer it blind, then argue.'}
-          </div>
-        )}
         {!q && (
           <div className="rounded-lg border border-dashed border-line px-3 py-3 text-sm text-muted">
             <div className="font-medium text-ink">This room is waiting for its first question.</div>

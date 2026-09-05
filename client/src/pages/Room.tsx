@@ -23,10 +23,17 @@ export default function Room({ code }: { code: string }) {
   const [notes] = useTable(tables.note.where(r => r.roomId.eq(roomId)), { enabled });
   const [slots] = useTable(tables.modelSlot);
 
-  const question: Question | undefined = useMemo(
+  const latestQuestion: Question | undefined = useMemo(
     () => questions.reduce<Question | undefined>((best, q) => (!best || q.id > best.id ? q : best), undefined),
     [questions]
   );
+  // The room shows the latest question unless the reader picks an earlier one. A new question snaps back to latest.
+  const [viewQid, setViewQid] = useState<bigint | null>(null);
+  const latestId = latestQuestion?.id ?? 0n;
+  useEffect(() => {
+    setViewQid(null);
+  }, [latestId]);
+  const question: Question | undefined = (viewQid !== null ? questions.find(q => q.id === viewQid) : undefined) ?? latestQuestion;
   const qid = question?.id ?? 0n;
   const qEnabled = !!question;
 
@@ -211,6 +218,8 @@ export default function Room({ code }: { code: string }) {
           <Answer
             room={room}
             question={question}
+            questions={questions}
+            onSelectQuestion={id => setViewQid(id === latestId ? null : id)}
             paragraphs={paragraphs}
             objections={objections}
             evidence={evidence}

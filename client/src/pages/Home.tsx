@@ -97,7 +97,6 @@ export default function Home() {
               }
             }}
             rows={2}
-            autoFocus
             placeholder="A decision, a plan, a claim you want stress-tested. One or two sentences."
             className="w-full resize-none rounded-md border border-line bg-paper px-3 py-3 text-lg leading-snug outline-none focus:border-ink"
             maxLength={2000}

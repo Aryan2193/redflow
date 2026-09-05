@@ -9,6 +9,8 @@ import { renderShareCard, shareOrDownload } from '../lib/shareCard';
 type Props = {
   room: Room;
   question?: Question;
+  questions: readonly Question[];
+  onSelectQuestion: (id: bigint) => void;
   paragraphs: readonly Paragraph[];
   objections: readonly Objection[];
   evidence: readonly Evidence[];
@@ -134,11 +136,32 @@ export default function Answer(p: Props) {
     );
   }
 
+  const others = [...p.questions].filter(x => x.id !== q.id).sort((a, b) => Number(b.id - a.id));
+
   return (
-    <div className="px-5 pb-28 pt-5 md:px-8">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-        Asked by {q.askedByName} · {timeAgo(q.createdAt, p.now)}
-      </p>
+    <div className="px-5 pb-12 pt-5 md:px-8">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+          Asked by {q.askedByName} · {timeAgo(q.createdAt, p.now)}
+        </p>
+        {others.length > 0 && (
+          <label className="text-xs text-muted">
+            <span className="mr-1">This room has {p.questions.length} questions.</span>
+            <select
+              value={q.id.toString()}
+              onChange={e => p.onSelectQuestion(BigInt(e.target.value))}
+              className="rounded border border-line bg-sheet px-1.5 py-0.5 text-xs text-ink"
+              aria-label="Choose a question in this room"
+            >
+              {[...p.questions].sort((a, b) => Number(b.id - a.id)).map(x => (
+                <option key={x.id.toString()} value={x.id.toString()}>
+                  {x.text.slice(0, 70)}{x.text.length > 70 ? '...' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
       <h2 className="font-display mt-1 text-2xl leading-snug">{q.text}</h2>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
