@@ -38,6 +38,7 @@ export const Config = __t.object("Config", {
   maxQuestionsPerRoom: __t.u32(),
   maxMembersPerRoom: __t.u32(),
   defaultRoundCap: __t.u32(),
+  siteUrl: __t.string(),
 });
 export type Config = __Infer<typeof Config>;
 
@@ -156,6 +157,7 @@ export const Provider = __t.object("Provider", {
   baseUrl: __t.string(),
   apiKey: __t.string(),
   enabled: __t.bool(),
+  extra: __t.string(),
 });
 export type Provider = __Infer<typeof Provider>;
 

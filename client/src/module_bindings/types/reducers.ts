@@ -13,10 +13,12 @@ import JoinRoomReducer from "../join_room_reducer";
 import LeaveRoomReducer from "../leave_room_reducer";
 import PostNoteReducer from "../post_note_reducer";
 import RequestVerdictEmailReducer from "../request_verdict_email_reducer";
+import SetEmailProviderReducer from "../set_email_provider_reducer";
 import SetKillSwitchReducer from "../set_kill_switch_reducer";
 import SetLimitsReducer from "../set_limits_reducer";
 import SetModelSlotReducer from "../set_model_slot_reducer";
 import SetProviderKeyReducer from "../set_provider_key_reducer";
+import SetSiteUrlReducer from "../set_site_url_reducer";
 import WrapUpReducer from "../wrap_up_reducer";
 
 export type AskParams = __Infer<typeof AskReducer>;
@@ -26,9 +28,11 @@ export type JoinRoomParams = __Infer<typeof JoinRoomReducer>;
 export type LeaveRoomParams = __Infer<typeof LeaveRoomReducer>;
 export type PostNoteParams = __Infer<typeof PostNoteReducer>;
 export type RequestVerdictEmailParams = __Infer<typeof RequestVerdictEmailReducer>;
+export type SetEmailProviderParams = __Infer<typeof SetEmailProviderReducer>;
 export type SetKillSwitchParams = __Infer<typeof SetKillSwitchReducer>;
 export type SetLimitsParams = __Infer<typeof SetLimitsReducer>;
 export type SetModelSlotParams = __Infer<typeof SetModelSlotReducer>;
 export type SetProviderKeyParams = __Infer<typeof SetProviderKeyReducer>;
+export type SetSiteUrlParams = __Infer<typeof SetSiteUrlReducer>;
 export type WrapUpParams = __Infer<typeof WrapUpReducer>;
 

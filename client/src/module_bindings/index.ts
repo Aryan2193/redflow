@@ -41,10 +41,12 @@ import JoinRoomReducer from "./join_room_reducer";
 import LeaveRoomReducer from "./leave_room_reducer";
 import PostNoteReducer from "./post_note_reducer";
 import RequestVerdictEmailReducer from "./request_verdict_email_reducer";
+import SetEmailProviderReducer from "./set_email_provider_reducer";
 import SetKillSwitchReducer from "./set_kill_switch_reducer";
 import SetLimitsReducer from "./set_limits_reducer";
 import SetModelSlotReducer from "./set_model_slot_reducer";
 import SetProviderKeyReducer from "./set_provider_key_reducer";
+import SetSiteUrlReducer from "./set_site_url_reducer";
 import WrapUpReducer from "./wrap_up_reducer";
 
 // Import all procedure arg schemas
@@ -261,10 +263,12 @@ const reducersSchema = __reducers(
   __reducerSchema("leave_room", LeaveRoomReducer),
   __reducerSchema("post_note", PostNoteReducer),
   __reducerSchema("request_verdict_email", RequestVerdictEmailReducer),
+  __reducerSchema("set_email_provider", SetEmailProviderReducer),
   __reducerSchema("set_kill_switch", SetKillSwitchReducer),
   __reducerSchema("set_limits", SetLimitsReducer),
   __reducerSchema("set_model_slot", SetModelSlotReducer),
   __reducerSchema("set_provider_key", SetProviderKeyReducer),
+  __reducerSchema("set_site_url", SetSiteUrlReducer),
   __reducerSchema("wrap_up", WrapUpReducer),
 );
 
