@@ -64,3 +64,11 @@
 
 ## 19:40 stranger test (isolated browser context, no saved name/token, Maincloud)
 - Home -> open room: 521ms to /r/AWCJ. Room tab opened by default. Ask visible in 274ms. Agents visible immediately. Member online on server.
+
+## 20:25 feedback round 1 (Aryan)
+- One-step rooms: openRoom(name, question) reducer, title derived from the question. Home is question-first.
+- Composers auto-grow (lib/autosize.ts). Enter sends, Shift+Enter newline.
+- Page no longer scrolls; each panel scrolls itself; stream follows new items only when reader is at the bottom or just sent.
+- Team questions persist until answered (even after settle). Latest version summary shown under the status pill with highlight. Answer tab marker when a version lands while on Room tab.
+- Earlier questions in a room selectable from a dropdown.
+- Verified in isolated browser: one-step open 581ms, textarea grows, page scroll 0.
