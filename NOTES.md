@@ -56,3 +56,8 @@
 - Steering verified: note posted during drafting is consumed at moderate (v1 why credits the author, causeType note) and chair cites notes as causes at synthesize. q5 settled in 68s.
 - go_deeper verified (round 2 settled, ledger empty).
 - Checkpoint 3 brief delivered to Aryan in chat. Still waiting: publish decision (domain vs GitHub Pages), email sender.
+
+## 19:35
+- Maincloud reducer round-trip 3s (an earlier 60s CLI timeout was a blip). Demo room 42YU running q2.
+- GitHub Pages repo NOT created yet (Aryan has not run the two commands). Staging refreshed at C:/Users/aryan/redflow-web.
+- vercel CLI installed globally (no login yet) so a domain deploy is one login + one command.
