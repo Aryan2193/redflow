@@ -1,0 +1,7 @@
+# secrets never enter git
+.secrets/
+.env
+.env.*
+node_modules/
+dist/
+.DS_Store
