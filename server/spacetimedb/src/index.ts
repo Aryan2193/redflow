@@ -317,7 +317,7 @@ export const init = spacetimedb.init(ctx => {
   });
   ctx.db.provider.insert({ id: 1, name: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '', enabled: true, extra: '' });
   const seed = [
-    ['council_a', 'z-ai/glm-5.3-flash', 'GLM', false, ''],
+    ['council_a', 'google/gemini-3.1-flash-lite', 'Gemini', false, 'low'],
     ['council_b', 'openai/gpt-oss-120b', 'GPT-OSS', false, 'low'],
     ['council_c', 'meta-llama/llama-4-maverick', 'Llama', false, ''],
     ['checker', 'openai/gpt-oss-120b', 'GPT-OSS', true, 'low'],
@@ -1558,17 +1558,27 @@ function stepSynthesize(ctx: any, load: any, arg: any) {
           additionalProperties: false,
         },
       },
+      overruled_objections: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { id: { type: 'integer' }, reason: { type: 'string' } },
+          required: ['id', 'reason'],
+          additionalProperties: false,
+        },
+      },
       summary: { type: 'string' },
     },
-    required: ['edits', 'addressed_objections', 'summary'],
+    required: ['edits', 'addressed_objections', 'overruled_objections', 'summary'],
     additionalProperties: false,
   };
-  const user = `${briefBlock(r, q)}\n${answerBlock(paras)}\n<ledger_open>\n${open.map((o: any) => `objection id=${o.id} [para ${o.targetOrdinal}] claim: "${o.claim}" issue: ${o.issue}`).join('\n') || '(empty)'}\n</ledger_open>\n<evidence>\n${ev.map((e: any) => `evidence id=${e.id} [para ${e.targetOrdinal}] ${e.verdict.toUpperCase()}: "${e.claim}" source: ${e.url} quote: "${e.excerpt}"`).join('\n') || '(none)'}\n</evidence>\n<overruled>\n${overruled.map((o: any) => `objection ${o.id} was overruled: ${o.resolution}`).join('\n') || '(none)'}\n</overruled>\n<team_notes_new>\n${[...fresh, ...answered.map((t: any) => ({ id: t.id, authorName: t.answeredByName, text: `answered "${t.text}": ${t.answer}`, isAnswer: true }))].map((n: any) => `note id=${n.id}${n.isAnswer ? ' (answer to the room)' : ''} from ${n.authorName}: ${n.text}`).join('\n') || '(none)'}\n</team_notes_new>\n\nYou are the chair. Rebuild the answer. Every edit must cite exactly one cause from the ledger, the evidence, or the new team notes, by its id. Rewrite a paragraph to fix what an objection or a refuting source showed. Add a paragraph only for something a team note or evidence introduced. Remove a paragraph only when evidence refutes it outright. An edit with no real cause will be thrown away, so do not pad. Then list which open objections you addressed and how. Keep paragraphs short, one point each, and keep the whole answer under 400 words. Summary: one line on what changed.`;
+  const user = `${briefBlock(r, q)}\n${answerBlock(paras)}\n<ledger_open>\n${open.map((o: any) => `objection id=${o.id} [para ${o.targetOrdinal}] claim: "${o.claim}" issue: ${o.issue}`).join('\n') || '(empty)'}\n</ledger_open>\n<evidence>\n${ev.map((e: any) => `evidence id=${e.id} [para ${e.targetOrdinal}] ${e.verdict.toUpperCase()}: "${e.claim}" source: ${e.url} quote: "${e.excerpt}"`).join('\n') || '(none)'}\n</evidence>\n<overruled>\n${overruled.map((o: any) => `objection ${o.id} was overruled: ${o.resolution}`).join('\n') || '(none)'}\n</overruled>\n<team_notes_new>\n${[...fresh, ...answered.map((t: any) => ({ id: t.id, authorName: t.answeredByName, text: `answered "${t.text}": ${t.answer}`, isAnswer: true }))].map((n: any) => `note id=${n.id}${n.isAnswer ? ' (answer to the room)' : ''} from ${n.authorName}: ${n.text}`).join('\n') || '(none)'}\n</team_notes_new>\n\nYou are the chair. Rebuild the answer. Every edit must cite exactly one cause from the ledger, the evidence, or the new team notes, by its id. Rewrite a paragraph to fix what an objection or a refuting source showed. Add a paragraph only for something a team note or evidence introduced. Remove a paragraph only when evidence refutes it outright. An edit with no real cause will be thrown away, so do not pad. Then handle every open objection, leaving none untouched: list the ones you addressed with an edit and how, and overrule the rest with a one-line reason why the objection is wrong or does not change the answer. An objection you neither address nor overrule stays open against you. Keep paragraphs short, one point each, and keep the whole answer under 400 words. Summary: one line on what changed.`;
   const res = callModel(ctx, slotRow, prov, HOUSE + '\nYou are the chair. You change nothing without a cause you can point to.', user, schema, 1800, 0, 75_000);
   ctx.withTx((tx: Tx) => noteCall(tx, q.id, q.roomId));
   if (!res.ok) return failStep(ctx, arg, load, res.error);
   const edits = (Array.isArray(res.json.edits) ? res.json.edits : []).slice(0, 8);
   const addressed = (Array.isArray(res.json.addressed_objections) ? res.json.addressed_objections : []).slice(0, 12);
+  const overrules = (Array.isArray(res.json.overruled_objections) ? res.json.overruled_objections : []).slice(0, 12);
   const summary = str(res.json.summary, 300, 'Revised from the ledger.');
   ctx.withTx((tx: Tx) => {
     const qq = tx.db.question.id.find(q.id);
@@ -1631,6 +1641,14 @@ function stepSynthesize(ctx: any, load: any, arg: any) {
       if (!openIds.has(id)) continue;
       const o = tx.db.objection.id.find(BigInt(id));
       if (o && o.status === 'open') tx.db.objection.id.update({ ...o, status: 'addressed', resolution: str(a?.how, 300, 'addressed by the chair'), updatedAt: tx.timestamp });
+    }
+    // Overruling needs a reason, like withdrawing does. No reason, no overrule.
+    for (const a of overrules) {
+      const id = int(a?.id, 0, 1_000_000_000, -1);
+      const reason = str(a?.reason, 300);
+      if (!openIds.has(id) || !reason) continue;
+      const o = tx.db.objection.id.find(BigInt(id));
+      if (o && o.status === 'open') tx.db.objection.id.update({ ...o, status: 'overruled', resolution: 'Overruled by the chair: ' + reason, updatedAt: tx.timestamp });
     }
     // Paragraph statuses follow the ledger: open objection means contested; addressed but unverified stays until the critic confirms.
     const stillOpen = openObjections(tx.db, q.id);

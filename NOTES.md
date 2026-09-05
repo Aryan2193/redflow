@@ -33,3 +33,16 @@
 ## Rule learned 18:25
 - After ANY schema change: `spacetime generate` again, or the client binary reader throws RangeError on the changed table. Bindings live in client/src/module_bindings.
 - First full loop settled 18:24: ask 18:19:25, v1 ~18:20:00 (drafts 5-7s each, serial), settled ~18:24:20 with v2, 5 withdrawn, 3 unresolved, 1 uncaused edit refused, 1 web check (unclear). Whole round ~5 min; target under 3. Critic JSON failures (DeepSeek reasoning) cost ~40s; headroom raised to +1400 tokens.
+
+## 18:43 state
+- Watchdog live (30s tick, restarts stalled steps after 110s idle, wraps up after 9 min). Needed because a republish mid-step orphaned a Maincloud synthesize step.
+- Council now GLM 5.3 flash / gpt-oss-120b (low) / Llama 4 Maverick; checker gpt-oss + web; chair Sonnet 4.6. DeepSeek dropped: invalid JSON 3 of 6 calls.
+- Email step implemented (Resend or webhook), waiting on provider choice. setEmailProvider + setSiteUrl reducers.
+- Dev server on LAN: http://10.155.96.27:5173 (mode production => Maincloud). Demo room on Maincloud: Q6S9.
+- Client verified: join, live question arrival, phone layout, ask from browser (question 3 asked by browser identity). devtools fill() does not trigger React state; use evaluate_script with native setter for automated tests.
+
+## 18:52 roster (final unless something breaks)
+- council_a google/gemini-3.1-flash-lite (low) 3.8s critique; council_b openai/gpt-oss-120b (low) 1.9s; council_c meta-llama/llama-4-maverick 6.2s; checker gpt-oss-120b + web; chair claude-sonnet-4.6 (~11s). Provider sort=latency for non-chair.
+- Rejected: GLM 5.3 flash (18s to 153s), qwen3.x flash (14-23s), deepseek v4 flash (10s, bad JSON), glm-4.7, gemini-3.5-flash-lite (1 objection only).
+- Maincloud demo loop: ask 18:45:21, v1 18:46:02 (41s), settled 18:48:33 (3m12s).
+- Chair may now overrule objections with a reason (status overruled) instead of leaving them to expire unresolved.

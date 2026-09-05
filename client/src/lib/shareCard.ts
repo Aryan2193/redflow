@@ -137,7 +137,11 @@ export async function shareOrDownload(blob: Blob, filename: string): Promise<'sh
   }
   try {
     if (navigator.clipboard && 'write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      // Clipboard permission prompts can hang. Give it two seconds, then save the file instead.
+      await Promise.race([
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('clipboard timeout')), 2000)),
+      ]);
       return 'copied';
     }
   } catch {
