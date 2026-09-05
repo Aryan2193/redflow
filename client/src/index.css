@@ -1,21 +1,23 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-paper: #f6f4ef;
+  --color-paper: #f7f5f0;
   --color-sheet: #fffdf9;
   --color-ink: #1c1a17;
-  --color-ink-2: #4a463f;
-  --color-muted: #7a746a;
-  --color-line: #e2ddd3;
-  --color-line-2: #ece8e0;
+  --color-ink-2: #453f37;
+  --color-muted: #7d766b;
+  --color-line: #e3ded4;
+  --color-line-2: #ede9e1;
   --color-red: #b8321f;
-  --color-red-soft: #f9e4df;
+  --color-red-soft: #f9e6e1;
   --color-ok: #2f7a4d;
-  --color-ok-soft: #e0f1e6;
+  --color-ok-soft: #e2f1e7;
   --color-warn: #a86a0b;
-  --color-warn-soft: #f8ecd3;
-  --color-judg: #5a6577;
-  --color-judg-soft: #e6e9ee;
+  --color-warn-soft: #f8edd6;
+  --color-judg: #5f6b7a;
+  --color-judg-soft: #e8ebef;
+  --color-teal: #1c7c8a;
+  --color-slate: #4a5d8a;
   --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
   --font-sans: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
@@ -33,11 +35,70 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-.answer-text {
+/* The answer reads like a document. */
+.doc {
   font-family: var(--font-display);
-  font-size: 1.125rem;
-  line-height: 1.55;
-  letter-spacing: 0.002em;
+  font-size: 1.1875rem;
+  line-height: 1.6;
+  color: var(--color-ink);
+}
+.doc p {
+  margin: 0 0 0.9em;
+}
+.doc p:last-child {
+  margin-bottom: 0;
+}
+.doc ul,
+.doc ol {
+  margin: 0.2em 0 0.9em;
+  padding-left: 1.3em;
+}
+.doc li {
+  margin: 0.25em 0;
+}
+.doc li::marker {
+  color: var(--color-muted);
+}
+.doc strong {
+  font-weight: 600;
+}
+.doc a {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--color-line);
+}
+.doc h1,
+.doc h2,
+.doc h3,
+.doc h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+.doc code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--color-line-2);
+  padding: 0 0.3em;
+  border-radius: 3px;
+}
+.doc blockquote {
+  margin: 0.4em 0 0.9em;
+  padding-left: 0.9em;
+  border-left: 2px solid var(--color-line);
+  color: var(--color-ink-2);
+}
+.doc table {
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 0.85em;
+  margin: 0.4em 0 1em;
+}
+.doc th,
+.doc td {
+  text-align: left;
+  padding: 0.35em 0.6em;
+  border-bottom: 1px solid var(--color-line-2);
 }
 
 .diff-add {
@@ -86,7 +147,8 @@ body {
 
 input,
 textarea,
-button {
+button,
+select {
   font: inherit;
 }
 

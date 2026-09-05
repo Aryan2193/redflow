@@ -18,4 +18,5 @@ export default __t.row({
   useWeb: __t.bool().name("use_web"),
   enabled: __t.bool(),
   reasoning: __t.string(),
+  jsonMode: __t.string().name("json_mode"),
 });

@@ -22,4 +22,5 @@ export default __t.row({
   why: __t.string(),
   createdAt: __t.timestamp().name("created_at"),
   current: __t.bool(),
+  heading: __t.string(),
 });

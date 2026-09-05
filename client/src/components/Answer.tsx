@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useReducer } from 'spacetimedb/react';
 import { reducers } from '../module_bindings';
 import type { AgentStatus, AnswerVersion, Draft, Evidence, ModelSlot, Objection, Paragraph, Question, Room, TeamQuestion } from '../module_bindings/types';
 import { wordDiff } from '../lib/diff';
 import { timeAgo, toDate } from '../lib/stdb';
 import { renderShareCard, shareOrDownload } from '../lib/shareCard';
+import { STAGES, STATUS_DOT, STATUS_HELP, STATUS_LABEL, STATUS_TEXT, narrative, stageIndex } from '../lib/labels';
 
 type Props = {
   room: Room;
@@ -23,52 +26,25 @@ type Props = {
   myName: string;
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  verified: 'Verified',
-  agreed: 'Agreed',
-  contested: 'Contested',
-  unresolved: 'Unresolved',
-};
-const STATUS_CLASS: Record<string, string> = {
-  verified: 'border-ok bg-ok-soft text-ok',
-  agreed: 'border-judg bg-judg-soft text-judg',
-  contested: 'border-warn bg-warn-soft text-warn',
-  unresolved: 'border-red bg-red-soft text-red',
-};
-const STATUS_BAR: Record<string, string> = {
-  verified: 'bg-ok',
-  agreed: 'bg-judg',
-  contested: 'bg-warn',
-  unresolved: 'bg-red',
-};
-
-export function stateLine(q: Question, statuses: readonly AgentStatus[], slots: readonly ModelSlot[], unresolved = 0): string {
-  const label = (slot: string) => slots.find(s => s.slot === slot)?.label ?? slot;
-  const active = statuses.filter(s => !['idle', 'done', 'failed'].includes(s.state));
-  switch (q.state) {
-    case 'drafting': {
-      const who = active.map(s => label(s.slot));
-      return who.length ? `${who.join(', ')} drafting blind` : 'Three models are drafting blind';
-    }
-    case 'moderating':
-      return `${label('chair')} is reading the drafts and building version one`;
-    case 'critiquing':
-      return 'Critics are attacking the drafts and version ' + q.version;
-    case 'dissenting':
-      return `Nobody objected. ${active[0] ? label(active[0].slot) : 'One model'} is assigned to argue the other side`;
-    case 'grounding':
-      return `${label('checker')} is checking claims on the web`;
-    case 'synthesizing':
-      return `${label('chair')} is rebuilding the answer from the ledger`;
-    case 'verifying':
-      return 'Critics are checking whether the fixes hold';
-    case 'settled':
-      return unresolved > 0 ? `Settled with ${unresolved} unresolved risk${unresolved === 1 ? '' : 's'}` : 'Settled. Every objection was resolved';
-    case 'failed':
-      return 'The room hit a problem';
-    default:
-      return q.state;
-  }
+function Stepper({ q, openRisks }: { q: Question; openRisks: number }) {
+  const idx = stageIndex(q);
+  const settled = q.state === 'settled' || q.state === 'failed';
+  return (
+    <ol className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider" aria-label="Progress">
+      {STAGES.map((s, i) => {
+        const done = i < idx || (settled && i === 4);
+        const active = i === idx && !settled;
+        const color = done ? (i === 4 && openRisks > 0 ? 'text-warn' : 'text-ok') : active ? 'text-ink' : 'text-muted/60';
+        return (
+          <li key={s} className={`flex items-center gap-1 ${color}`}>
+            <span className={`inline-block h-2 w-2 rounded-full ${done ? (i === 4 && openRisks > 0 ? 'bg-warn' : 'bg-ok') : active ? 'bg-red pulse' : 'bg-line'}`} aria-hidden />
+            <span className="hidden sm:inline">{s}</span>
+            {i < STAGES.length - 1 && <span className="mx-1 h-px w-3 bg-line sm:w-5" aria-hidden />}
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 export default function Answer(p: Props) {
@@ -78,12 +54,24 @@ export default function Answer(p: Props) {
   const requestEmail = useReducer(reducers.requestVerdictEmail);
   const postNote = useReducer(reducers.postNote);
   const [open, setOpen] = useState<bigint | null>(null);
-  const [showBefore, setShowBefore] = useState(false);
+  const [view, setView] = useState<'after' | 'before'>('after');
   const [email, setEmail] = useState('');
   const [emailState, setEmailState] = useState<'idle' | 'sent' | 'error'>('idle');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [err, setErr] = useState('');
   const [shareState, setShareState] = useState<'idle' | 'working' | 'shared' | 'downloaded' | 'copied'>('idle');
+
+  const current = useMemo(() => p.paragraphs.filter(x => x.current && x.text).sort((a, b) => a.ordinal - b.ordinal), [p.paragraphs]);
+  const versionOne = useMemo(() => p.paragraphs.filter(x => x.version === 1 && x.text).sort((a, b) => a.ordinal - b.ordinal), [p.paragraphs]);
+  const previousOf = (para: Paragraph) => p.paragraphs.filter(x => x.ordinal === para.ordinal && x.version < para.version && x.text).sort((a, b) => b.version - a.version)[0];
+  const openRisks = p.objections.filter(o => o.status === 'unresolved');
+  const resolved = p.objections.filter(o => o.status === 'withdrawn' || o.status === 'overruled').length;
+  const openTeamQs = p.teamQs.filter(t => !t.answeredAt);
+  const busy = !!q && !['settled', 'failed'].includes(q.state);
+  const sortedVersions = [...p.versions].sort((a, b) => a.version - b.version);
+  const latest = sortedVersions[sortedVersions.length - 1];
+  const leadLabel = p.slots.find(s => s.slot === 'council_a')?.label ?? 'The lead';
+  const shown = view === 'before' && versionOne.length ? versionOne : current;
 
   async function share() {
     if (!q) return;
@@ -95,7 +83,7 @@ export default function Answer(p: Props) {
         paragraphs: [...p.paragraphs],
         objections: p.objections,
         models: p.slots.filter(s => s.slot.startsWith('council')).map(s => s.label),
-        siteUrl: window.location.origin.includes('127.0.0.1') || window.location.origin.includes('localhost') ? '' : window.location.origin,
+        siteUrl: /localhost|127\.0\.0\.1|10\.\d+\./.test(window.location.origin) ? '' : window.location.origin,
       });
       const result = await shareOrDownload(blob, `redflow-${p.room.code}-v${q.version}.png`);
       setShareState(result);
@@ -106,88 +94,60 @@ export default function Answer(p: Props) {
     }
   }
 
-  const current = useMemo(() => p.paragraphs.filter(x => x.current).sort((a, b) => a.ordinal - b.ordinal), [p.paragraphs]);
-  const previousOf = (para: Paragraph) =>
-    p.paragraphs
-      .filter(x => x.ordinal === para.ordinal && x.version < para.version && x.text)
-      .sort((a, b) => b.version - a.version)[0];
-  const unresolved = p.objections.filter(o => o.status === 'unresolved');
-  const openTeamQs = p.teamQs.filter(t => !t.answeredAt);
-  const firstDraft = p.drafts.find(d => d.label === 'A') ?? p.drafts[0];
-  const busy = q && !['settled', 'failed'].includes(q.state);
-  const sortedVersions = [...p.versions].sort((a, b) => a.version - b.version);
-  const latest = sortedVersions[sortedVersions.length - 1];
-
   if (!q) {
     return (
-      <div className="px-5 py-10 md:px-8">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted">The answer</p>
-        <h2 className="font-display mt-2 text-2xl leading-snug">Nothing asked yet.</h2>
-        <p className="mt-3 max-w-md text-ink-2">
-          Ask the room one question. Three models answer it blind, then attack each other's drafts, then a chair rebuilds the answer with every change justified. On a phone, the composer is under the Room tab.
+      <div className="mx-auto max-w-[68ch] px-5 py-12 md:px-8">
+        <h2 className="font-display text-3xl leading-tight">Nothing asked yet.</h2>
+        <p className="mt-3 text-ink-2">
+          Ask the room one question. {leadLabel} writes the best answer it can in about twenty seconds. Then two other models attack it, facts get checked, and {leadLabel} revises with every change justified. You can interrupt at any point.
         </p>
-        {p.room.brief && (
-          <div className="mt-6 rounded-md border border-line bg-sheet p-4 text-sm text-ink-2">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Room brief</div>
-            {p.room.brief}
-          </div>
-        )}
+        {p.room.brief && <div className="mt-6 rounded-md border border-line bg-sheet p-4 text-sm text-ink-2">{p.room.brief}</div>}
       </div>
     );
   }
 
-  const others = [...p.questions].filter(x => x.id !== q.id).sort((a, b) => Number(b.id - a.id));
+  const others = p.questions.filter(x => x.id !== q.id);
 
   return (
-    <div className="px-5 pb-12 pt-5 md:px-8">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-          Asked by {q.askedByName} · {timeAgo(q.createdAt, p.now)}
-        </p>
-        {others.length > 0 && (
-          <label className="text-xs text-muted">
-            <span className="mr-1">This room has {p.questions.length} questions.</span>
+    <article className="mx-auto max-w-[70ch] px-5 pb-16 pt-6 md:px-8">
+      <header>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+          <span>
+            Asked by <span className="font-medium text-ink-2">{q.askedByName}</span> · {timeAgo(q.createdAt, p.now)}
+          </span>
+          {others.length > 0 && (
             <select
               value={q.id.toString()}
               onChange={e => p.onSelectQuestion(BigInt(e.target.value))}
               className="rounded border border-line bg-sheet px-1.5 py-0.5 text-xs text-ink"
-              aria-label="Choose a question in this room"
+              aria-label="Other questions in this room"
             >
               {[...p.questions].sort((a, b) => Number(b.id - a.id)).map(x => (
                 <option key={x.id.toString()} value={x.id.toString()}>
-                  {x.text.slice(0, 70)}{x.text.length > 70 ? '...' : ''}
+                  {x.text.slice(0, 60)}{x.text.length > 60 ? '...' : ''}
                 </option>
               ))}
             </select>
-          </label>
-        )}
-      </div>
-      <h2 className="font-display mt-1 text-2xl leading-snug">{q.text}</h2>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 ${busy ? 'border-line bg-sheet text-ink-2' : unresolved.length ? STATUS_CLASS.unresolved : STATUS_CLASS.verified}`}>
-          {busy && <span className="pulse inline-block h-1.5 w-1.5 rounded-full bg-red" aria-hidden />}
-          {stateLine(q, p.statuses, p.slots, unresolved.length)}
-        </span>
-        {q.version > 0 && <span className="text-muted">version {q.version}</span>}
-        {q.lastError && !q.lastError.includes('retrying') && q.state !== 'settled' && (
-          <span className="text-xs text-red">{q.lastError.slice(0, 90)}</span>
-        )}
-      </div>
-
-      {latest && (
-        <div className={`mt-3 rounded-md border border-line bg-sheet px-3 py-2 text-sm text-ink-2 ${p.now - toDate(latest.createdAt).getTime() < 9000 ? 'landed' : ''}`}>
-          <span className="font-mono text-xs text-muted">v{latest.version}</span> {latest.summary}
+          )}
         </div>
-      )}
+        <h1 className="font-display mt-2 text-[1.7rem] leading-[1.25] tracking-tight sm:text-[2rem]">{q.text}</h1>
+
+        <div className="mt-5 rounded-lg border border-line bg-sheet px-4 py-3">
+          <Stepper q={q} openRisks={openRisks.length} />
+          <p className={`mt-2 text-sm ${q.state === 'settled' ? (openRisks.length ? 'text-warn' : 'text-ok') : 'text-ink-2'}`}>{narrative(q, p.statuses, p.slots, openRisks.length)}</p>
+          {latest && latest.version > 1 && (
+            <p className={`mt-2 border-t border-line-2 pt-2 text-sm text-ink-2 ${p.now - toDate(latest.createdAt).getTime() < 9000 ? 'landed' : ''}`}>
+              <span className="font-semibold text-ink">Version {latest.version}.</span> {latest.summary}
+            </p>
+          )}
+          {q.lastError && !q.lastError.includes('retrying') && !q.lastError.startsWith('watchdog') && q.state !== 'settled' && <p className="mt-2 text-xs text-red">{q.lastError.slice(0, 120)}</p>}
+        </div>
+      </header>
 
       {openTeamQs.length > 0 && (
-        <div className="mt-5 rounded-lg border border-warn bg-warn-soft/60 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wider text-warn">The room asks you</div>
-          <p className="mt-1 text-sm text-ink-2">
-            Only your team can answer these. Anyone can reply.{' '}
-            {busy ? 'The agents read it on their next turn.' : 'The answer has settled, so your reply feeds the next round. Press Go deeper after answering.'}
-          </p>
+        <section className="mt-5 rounded-lg border border-warn/60 bg-warn-soft/50 p-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-warn">The room asks you</h2>
+          <p className="mt-1 text-sm text-ink-2">Only your team knows this. Anyone can answer. {busy ? 'The models read it on their next turn.' : 'The answer has settled, so your reply feeds the next round when you press Go deeper.'}</p>
           <ul className="mt-3 space-y-3">
             {openTeamQs.map(t => (
               <li key={t.id.toString()}>
@@ -217,100 +177,135 @@ export default function Answer(p: Props) {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {versionOne.length > 0 && current.length > 0 && q.version > 1 && (
+        <div className="mt-6 inline-flex rounded-md border border-line bg-sheet p-0.5 text-sm">
+          {(['before', 'after'] as const).map(v => (
+            <button key={v} onClick={() => setView(v)} className={`rounded px-3 py-1 ${view === v ? 'bg-ink text-paper' : 'text-ink-2'}`}>
+              {v === 'before' ? `${leadLabel} alone` : `After the debate (v${q.version})`}
+            </button>
+          ))}
         </div>
       )}
 
-      {current.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="mt-8 space-y-3">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="h-5 animate-pulse rounded bg-line-2" style={{ width: `${88 - i * 12}%` }} />
+          <div className="h-6 w-2/3 animate-pulse rounded bg-line-2" />
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="h-4 animate-pulse rounded bg-line-2" style={{ width: `${92 - i * 9}%` }} />
           ))}
-          <p className="pt-2 text-sm text-muted">The first version lands once the drafts are in. Usually under a minute.</p>
+          <p className="pt-2 text-sm text-muted">{leadLabel} is writing the first full answer. Usually about twenty seconds.</p>
         </div>
       ) : (
-        <ol className="mt-6 space-y-4">
-          {current.map(para => {
-            const prev = previousOf(para);
+        <div className="mt-6 space-y-8">
+          {shown.map(para => {
+            const prev = view === 'after' ? previousOf(para) : undefined;
             const isOpen = open === para.id;
-            // A paragraph that just changed shows its word-level diff for a few seconds without being tapped.
-            const fresh = p.now - toDate(para.createdAt).getTime() < 9000 && para.version > 1;
+            const fresh = view === 'after' && para.version > 1 && p.now - toDate(para.createdAt).getTime() < 9000;
             const showDiff = !!prev && (isOpen || fresh);
+            const status = view === 'before' ? 'agreed' : para.status;
+            const secEvidence = p.evidence.filter(e => e.targetOrdinal === para.ordinal);
+            const secObjections = p.objections.filter(o => o.targetOrdinal === para.ordinal && o.status !== 'withdrawn');
             return (
-              <li key={para.id.toString()} className={`relative rounded-md ${fresh ? 'landed' : ''}`}>
-                <div className={`absolute inset-y-1 left-0 w-1 rounded ${STATUS_BAR[para.status] ?? 'bg-judg'}`} aria-hidden />
-                <button onClick={() => setOpen(isOpen ? null : para.id)} className="block w-full pl-4 text-left">
-                  <p className="answer-text">
-                    {showDiff && prev ? (
-                      wordDiff(prev.text, para.text).map((s, i) =>
+              <section key={para.id.toString()} className={`rounded-md ${fresh ? 'landed' : ''}`}>
+                <div className="flex items-baseline gap-3">
+                  <span className={`mt-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT[status] ?? 'bg-judg'}`} title={STATUS_HELP[status]} aria-hidden />
+                  <h2 className="font-display text-[1.35rem] font-medium leading-snug">{para.heading || `Section ${para.ordinal}`}</h2>
+                  <button onClick={() => setOpen(isOpen ? null : para.id)} className={`ml-auto shrink-0 text-xs font-semibold uppercase tracking-wider ${STATUS_TEXT[status] ?? 'text-judg'}`} title="Why this section reads the way it does">
+                    {STATUS_LABEL[status] ?? status}
+                    {view === 'after' && para.version > 1 ? ` · v${para.version}` : ''}
+                  </button>
+                </div>
+                <div className="doc mt-2 pl-[22px]">
+                  {showDiff && prev ? (
+                    <p style={{ whiteSpace: 'pre-wrap' }}>
+                      {wordDiff(prev.text, para.text).map((s, i) =>
                         s.type === 'same' ? <span key={i}>{s.text}</span> : <span key={i} className={s.type === 'add' ? 'diff-add' : 'diff-del'}>{s.text}</span>
-                      )
-                    ) : (
-                      para.text
-                    )}
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
-                    <span className={`rounded-full border px-2 py-0.5 ${STATUS_CLASS[para.status] ?? STATUS_CLASS.agreed}`}>{STATUS_LABEL[para.status] ?? para.status}</span>
-                    {para.version > 1 && <span className="text-muted">changed in v{para.version}</span>}
-                    <span className="text-muted">{isOpen ? 'hide why' : 'why'}</span>
-                  </div>
-                </button>
-                {isOpen && (
-                  <div className="ml-4 mt-2 rounded-md border border-line bg-sheet p-3 text-sm text-ink-2">
+                      )}
+                    </p>
+                  ) : (
+                    <Markdown remarkPlugins={[remarkGfm]}>{para.text}</Markdown>
+                  )}
+                </div>
+                {isOpen && view === 'after' && (
+                  <div className="ml-[22px] mt-3 rounded-md border border-line bg-sheet p-3 text-sm text-ink-2">
                     <div>{para.why}</div>
                     {prev && <div className="mt-1 text-xs text-muted">Green is new, struck through is gone, compared with version {prev.version}.</div>}
-                    {p.evidence.filter(e => e.targetOrdinal === para.ordinal).map(e => (
+                    {secEvidence.map(e => (
                       <div key={e.id.toString()} className="mt-2 border-t border-line-2 pt-2">
                         <span className={`mr-2 rounded px-1.5 py-0.5 text-xs font-semibold ${e.verdict === 'supported' ? 'bg-ok-soft text-ok' : e.verdict === 'refuted' ? 'bg-red-soft text-red' : 'bg-warn-soft text-warn'}`}>{e.verdict}</span>
-                        <span>"{e.excerpt}"</span>{' '}
+                        <span>{e.title}</span>{' '}
                         {e.url && (
-                          <a href={e.url} target="_blank" rel="noreferrer" className="text-ink underline">
-                            source
+                          <a href={e.url} target="_blank" rel="noreferrer" className="underline">
+                            {new URL(e.url).hostname.replace(/^www\./, '')}
                           </a>
                         )}
                       </div>
                     ))}
-                    {p.objections.filter(o => o.targetOrdinal === para.ordinal && o.status !== 'withdrawn').map(o => (
+                    {secObjections.map(o => (
                       <div key={o.id.toString()} className="mt-2 border-t border-line-2 pt-2">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-muted">{o.status} objection</span>
-                        <div>{o.issue}</div>
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted">{o.status === 'unresolved' ? 'open risk' : o.status} · {p.slots.find(s => s.slot === o.bySlot)?.label ?? o.bySlot}</span>
+                        <div className="mt-0.5">{o.issue}</div>
                         {o.resolution && <div className="mt-0.5 text-xs text-muted">{o.resolution}</div>}
                       </div>
                     ))}
                   </div>
                 )}
-              </li>
+              </section>
             );
           })}
-        </ol>
+        </div>
       )}
 
-      {unresolved.length > 0 && (
-        <div className="mt-8 rounded-lg border border-red bg-red-soft/50 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wider text-red">Unresolved risks</div>
+      {view === 'before' && <p className="mt-4 text-sm text-muted">This is what {leadLabel} wrote alone, before anyone argued. Switch back to see what changed and why.</p>}
+
+      {(q.version > 0 || p.drafts.length > 0) && (
+        <div className="mt-10 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-4 text-sm text-ink-2">
+          <span>
+            <b className="text-ink">{p.drafts.length}</b> drafts
+          </span>
+          <span>
+            <b className="text-ink">{p.objections.length}</b> objections
+          </span>
+          <span>
+            <b className="text-ink">{resolved}</b> resolved
+          </span>
+          <span>
+            <b className="text-ink">{p.evidence.length}</b> facts checked
+          </span>
+          {openRisks.length > 0 && (
+            <span className="text-red">
+              <b>{openRisks.length}</b> open
+            </span>
+          )}
+        </div>
+      )}
+
+      {openRisks.length > 0 && (
+        <section className="mt-5 rounded-lg border border-red/50 bg-red-soft/40 p-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-red">Open risks</h2>
+          <p className="mt-1 text-sm text-ink-2">Objections that stood when the round ended. Press Go deeper to make the room work through them.</p>
           <ul className="mt-2 space-y-2 text-sm">
-            {unresolved.map(o => (
+            {openRisks.map(o => (
               <li key={o.id.toString()}>
                 <span className="font-medium">"{o.claim}"</span> {o.issue}
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
 
-      <div className="mt-8 flex flex-wrap gap-2">
+      <div className="mt-6 flex flex-wrap gap-2">
         {busy && (
           <button onClick={() => wrapUp({ questionId: q.id }).catch(e => setErr(String(e?.message ?? e)))} className="rounded-md border border-ink px-3 py-2 text-sm font-semibold">
-            Wrap it up
+            Wrap it up now
           </button>
         )}
         {q.state === 'settled' && (
-          <button onClick={() => goDeeper({ questionId: q.id }).catch(e => setErr(String(e?.message ?? e)))} className="rounded-md border border-ink px-3 py-2 text-sm font-semibold">
+          <button onClick={() => goDeeper({ questionId: q.id }).catch(e => setErr(String(e?.message ?? e)))} className="rounded-md bg-ink px-3 py-2 text-sm font-semibold text-paper">
             Go deeper
-          </button>
-        )}
-        {firstDraft && current.length > 0 && (
-          <button onClick={() => setShowBefore(v => !v)} className="rounded-md border border-line bg-sheet px-3 py-2 text-sm">
-            {showBefore ? 'Hide' : 'Show'} what one model said first
           </button>
         )}
         {current.length > 0 && (
@@ -320,28 +315,6 @@ export default function Answer(p: Props) {
         )}
       </div>
       {err && <p className="mt-2 text-sm text-red">{err}</p>}
-
-      {showBefore && firstDraft && (
-        <div className="mt-4 rounded-lg border border-line bg-sheet p-4">
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-            Before: a single model's blind draft ({firstDraft.model.split(' via ')[0]})
-          </div>
-          <div className="answer-text mt-2 whitespace-pre-line text-ink-2">{firstDraft.text}</div>
-        </div>
-      )}
-
-      {sortedVersions.length > 0 && (
-        <div className="mt-8">
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted">Versions</div>
-          <ol className="mt-2 space-y-1.5 text-sm text-ink-2">
-            {sortedVersions.map(v => (
-              <li key={v.id.toString()}>
-                <span className="font-mono text-xs text-muted">v{v.version}</span> {v.summary}
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
 
       {q.state === 'settled' && (
         <form
@@ -357,7 +330,7 @@ export default function Answer(p: Props) {
           }}
         >
           <div className="text-sm font-semibold">Email me this verdict</div>
-          <p className="mt-0.5 text-xs text-muted">The settled answer, the ledger, and the sources, in your inbox.</p>
+          <p className="mt-0.5 text-xs text-muted">The settled answer, the ledger, and the sources.</p>
           <div className="mt-2 flex gap-2">
             <input
               type="email"
@@ -372,6 +345,6 @@ export default function Answer(p: Props) {
           {emailState === 'error' && <p className="mt-2 text-xs text-red">That address did not go through. Check it and try again.</p>}
         </form>
       )}
-    </div>
+    </article>
   );
 }

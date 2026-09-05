@@ -3,6 +3,7 @@ import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { reducers, tables } from '../module_bindings';
 import type { Question } from '../module_bindings/types';
 import { idHex, rememberName, savedName } from '../lib/stdb';
+import { slotColor } from '../lib/labels';
 import Answer from '../components/Answer';
 import Stream from '../components/Stream';
 import { navigate } from '../App';
@@ -27,7 +28,6 @@ export default function Room({ code }: { code: string }) {
     () => questions.reduce<Question | undefined>((best, q) => (!best || q.id > best.id ? q : best), undefined),
     [questions]
   );
-  // The room shows the latest question unless the reader picks an earlier one. A new question snaps back to latest.
   const [viewQid, setViewQid] = useState<bigint | null>(null);
   const latestId = latestQuestion?.id ?? 0n;
   useEffect(() => {
@@ -51,7 +51,6 @@ export default function Room({ code }: { code: string }) {
   const [joinError, setJoinError] = useState('');
   const triedAutoJoin = useRef(false);
 
-  // Returning visitor with a remembered name walks straight in. A member who reloaded is marked present again.
   useEffect(() => {
     if (!room || !identity || !isActive) return;
     if (myMember && myMember.online) return;
@@ -61,10 +60,9 @@ export default function Room({ code }: { code: string }) {
     joinRoom({ code, name: n }).catch(err => setJoinError(String((err as Error)?.message ?? err)));
   }, [room, identity, isActive, myMember, code, joinRoom]);
 
-  const [tab, setTab] = useState<'answer' | 'room'>('answer');
+  const [tab, setTab] = useState<'answer' | 'debate'>('answer');
   const [copied, setCopied] = useState(false);
   const [explain, setExplain] = useState(false);
-  // Marker on the Answer tab when a version landed while the reader was on the Room tab.
   const [seenVersion, setSeenVersion] = useState(0);
   const currentVersion = question?.version ?? 0;
   useEffect(() => {
@@ -72,26 +70,20 @@ export default function Room({ code }: { code: string }) {
   }, [tab, currentVersion]);
   const answerChanged = currentVersion > seenVersion;
   const [now, setNow] = useState(Date.now());
-  // A room with no question yet opens on the composer, so a first-time visitor sees what to do.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, []);
   const steeredOnce = useRef(false);
   useEffect(() => {
     if (steeredOnce.current || !enabled || !questionsLoaded) return;
     steeredOnce.current = true;
-    if (questions.length === 0) setTab('room');
+    if (questions.length === 0) setTab('debate');
   }, [enabled, questionsLoaded, questions.length]);
-  useEffect(() => {
-    // Five seconds is enough for "2m ago" labels and the nine-second diff highlight. One second re-rendered everything constantly.
-    const t = setInterval(() => setNow(Date.now()), 5000);
-    return () => clearInterval(t);
-  }, []);
 
-  const orderedSlots = useMemo(
-    () => [...slots].sort((a, b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot)),
-    [slots]
-  );
+  const orderedSlots = useMemo(() => [...slots].sort((a, b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot)), [slots]);
+  const table = orderedSlots.filter(s => s.slot.startsWith('council'));
 
-  // Only declare a room missing on a live connection with the room subscription applied.
-  // During a reconnect the cache can be empty while "ready" is still true from the previous session.
   if (isActive && roomsReady && !room) {
     return (
       <main className="mx-auto max-w-md px-5 pt-24 text-center">
@@ -102,10 +94,7 @@ export default function Room({ code }: { code: string }) {
       </main>
     );
   }
-
-  if (!room) {
-    return <main className="px-5 pt-24 text-center text-muted">Opening the room.</main>;
-  }
+  if (!room) return <main className="px-5 pt-24 text-center text-muted">Opening the room.</main>;
 
   if (!myMember) {
     return (
@@ -127,19 +116,14 @@ export default function Room({ code }: { code: string }) {
           className="mt-8"
         >
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Your name</label>
-          <input
-            autoFocus
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="How the room should call you"
-            className="w-full rounded-md border border-line bg-sheet px-3 py-3 text-lg outline-none focus:border-ink"
-            maxLength={32}
-          />
+          <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="How the room should call you" className="w-full rounded-md border border-line bg-sheet px-3 py-3 text-lg outline-none focus:border-ink" maxLength={32} />
           <button type="submit" disabled={!isActive} className="mt-3 w-full rounded-md bg-ink px-4 py-3 font-semibold text-paper disabled:opacity-50">
             Step in
           </button>
           {joinError && <p className="mt-3 text-sm text-red">{joinError}</p>}
-          <p className="mt-6 text-sm text-muted">No account. Your name is remembered on this device. {members.length} {members.length === 1 ? 'person is' : 'people are'} already here.</p>
+          <p className="mt-6 text-sm text-muted">
+            No account. Your name is remembered on this device. {members.length} {members.length === 1 ? 'person is' : 'people are'} already here.
+          </p>
         </form>
       </main>
     );
@@ -148,16 +132,14 @@ export default function Room({ code }: { code: string }) {
   const online = members.filter(m => m.online);
 
   return (
-    <div className="mx-auto flex h-dvh max-w-6xl flex-col">
+    <div className="mx-auto flex h-dvh max-w-7xl flex-col">
       <header className="shrink-0 border-b border-line bg-paper">
         <div className="flex items-center gap-3 px-4 py-2.5">
           <button onClick={() => navigate('/')} className="flex items-center gap-2" aria-label="Redflow home">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-red" aria-hidden />
             <span className="text-sm font-semibold">Redflow</span>
           </button>
-          <div className="min-w-0 flex-1 truncate text-sm text-ink-2">
-            <span className="font-medium text-ink">{room.title}</span>
-          </div>
+          <div className="min-w-0 flex-1 truncate text-sm text-ink-2">{room.title}</div>
           <button
             onClick={() => {
               navigator.clipboard
@@ -174,14 +156,18 @@ export default function Room({ code }: { code: string }) {
             {copied ? <span className="font-sans tracking-normal text-ok">Link copied</span> : room.code}
           </button>
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 text-xs text-muted">
+        <div className="flex items-center gap-3 overflow-x-auto px-4 pb-2 text-xs text-muted">
           <span className="whitespace-nowrap">
             {online.length} here{online.length !== members.length ? `, ${members.length} joined` : ''}
           </span>
-          <span aria-hidden>·</span>
-          <span className="whitespace-nowrap">
-            At the table: {orderedSlots.filter(s => s.slot.startsWith('council')).map(s => s.label).join(', ')}
-            {orderedSlots.find(s => s.slot === 'chair') ? `, chaired by ${orderedSlots.find(s => s.slot === 'chair')!.label}` : ''}
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            {table.map(s => (
+              <span key={s.slot} className="inline-flex items-center gap-1">
+                <span className={`inline-block h-2 w-2 rounded-full ${slotColor(s.slot)}`} aria-hidden />
+                {s.label}
+                {s.slot === 'council_a' ? ' (lead)' : ''}
+              </span>
+            ))}
           </span>
           <button onClick={() => setExplain(v => !v)} className="ml-auto whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-ink-2">
             {explain ? 'Close' : 'How this works'}
@@ -190,23 +176,18 @@ export default function Room({ code }: { code: string }) {
         {explain && (
           <div className="border-t border-line-2 bg-sheet px-4 py-3 text-sm text-ink-2">
             <ol className="list-decimal space-y-1 pl-5">
-              <li>Someone asks one question. Three models from three labs answer it blind.</li>
-              <li>The chair builds version one and asks the team what only they can know.</li>
-              <li>Critics attack the drafts and the answer, anonymously. Checkable claims go to the web.</li>
-              <li>The chair rebuilds the answer. Every edit must cite an objection, a source, or a teammate's note, or the system refuses it.</li>
-              <li>Critics confirm their objections were fixed, or hold. Anything still standing shows as an unresolved risk.</li>
+              <li>You ask one question. {table[0]?.label ?? 'The lead'} writes the best full answer it can. That is version one, on screen in about twenty seconds.</li>
+              <li>{table.slice(1).map(s => s.label).join(' and ')} draft their own view blind, then attack the answer on substance. Each objection must say what would make it right.</li>
+              <li>Disputed facts are checked on the web. Then {table[0]?.label ?? 'the lead'} revises. Every change must cite an objection, a source, or your note, or the system refuses it.</li>
+              <li>A critic confirms the fixes hold. Anything still standing shows as an open risk. Nothing quietly disappears.</li>
             </ol>
-            <p className="mt-2">Type at any time. The agents read your notes on their next turn, and the paragraph you changed carries your name.</p>
+            <p className="mt-2">Type at any time. Your note is read on the next turn, and the section it changes carries your name.</p>
           </div>
         )}
         <div className="flex border-t border-line-2 md:hidden">
-          {(['answer', 'room'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`relative flex-1 py-2 text-sm font-semibold ${tab === t ? 'border-b-2 border-ink text-ink' : 'text-muted'}`}
-            >
-              {t === 'answer' ? 'Answer' : 'Room'}
+          {(['answer', 'debate'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`relative flex-1 py-2 text-sm font-semibold ${tab === t ? 'border-b-2 border-ink text-ink' : 'text-muted'}`}>
+              {t === 'answer' ? 'Answer' : 'Debate'}
               {t === 'answer' && answerChanged && <span className="absolute right-6 top-2 inline-block h-2 w-2 rounded-full bg-red" aria-label="The answer changed" />}
             </button>
           ))}
@@ -214,7 +195,7 @@ export default function Room({ code }: { code: string }) {
       </header>
 
       <div className="grid min-h-0 flex-1 md:grid-cols-12">
-        <section className={`${tab === 'answer' ? 'block' : 'hidden'} min-h-0 overflow-y-auto md:col-span-7 md:block md:border-r md:border-line`}>
+        <section className={`${tab === 'answer' ? 'block' : 'hidden'} min-h-0 overflow-y-auto md:col-span-8 md:block md:border-r md:border-line`}>
           <Answer
             room={room}
             question={question}
@@ -232,7 +213,7 @@ export default function Room({ code }: { code: string }) {
             myName={myMember.name}
           />
         </section>
-        <section className={`${tab === 'room' ? 'flex' : 'hidden'} min-h-0 flex-col md:col-span-5 md:flex`}>
+        <section className={`${tab === 'debate' ? 'flex' : 'hidden'} min-h-0 flex-col bg-paper md:col-span-4 md:flex`}>
           <Stream
             room={room}
             question={question}

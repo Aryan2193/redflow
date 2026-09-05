@@ -17,4 +17,5 @@ export default {
   providerId: __t.u32(),
   useWeb: __t.bool(),
   reasoning: __t.string(),
+  jsonMode: __t.string(),
 };

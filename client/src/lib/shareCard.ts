@@ -56,7 +56,9 @@ export async function renderShareCard(opts: {
   const qLines = wrap(scratch, opts.question.text, textW).slice(0, 4);
   const paras = opts.paragraphs.filter(p => p.current && p.text).sort((a, b) => a.ordinal - b.ordinal).slice(0, 5);
   scratch.font = `400 26px ${serif}`;
-  const paraLines = paras.map(p => wrap(scratch, p.text, textW - 28).slice(0, 6));
+  // Markdown is flattened for the card: headings become the first bold line, list markers become dashes.
+  const plain = (s: string) => s.replace(/^#+\s*/gm, '').replace(/\*\*/g, '').replace(/^\s*[-*]\s+/gm, '- ').replace(/\n{2,}/g, ' ').replace(/\n/g, ' ');
+  const paraLines = paras.map(p => wrap(scratch, (p.heading ? p.heading + '. ' : '') + plain(p.text), textW - 28).slice(0, 6));
   const withdrawn = opts.objections.filter(o => o.status === 'withdrawn' || o.status === 'overruled').length;
   const unresolved = opts.objections.filter(o => o.status === 'unresolved').length;
 

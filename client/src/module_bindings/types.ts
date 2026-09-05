@@ -101,6 +101,7 @@ export const ModelSlot = __t.object("ModelSlot", {
   useWeb: __t.bool(),
   enabled: __t.bool(),
   reasoning: __t.string(),
+  jsonMode: __t.string(),
 });
 export type ModelSlot = __Infer<typeof ModelSlot>;
 
@@ -148,6 +149,7 @@ export const Paragraph = __t.object("Paragraph", {
   why: __t.string(),
   createdAt: __t.timestamp(),
   current: __t.bool(),
+  heading: __t.string(),
 });
 export type Paragraph = __Infer<typeof Paragraph>;
 
