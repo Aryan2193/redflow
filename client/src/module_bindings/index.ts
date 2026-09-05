@@ -47,6 +47,7 @@ import SetLimitsReducer from "./set_limits_reducer";
 import SetModelSlotReducer from "./set_model_slot_reducer";
 import SetProviderKeyReducer from "./set_provider_key_reducer";
 import SetSiteUrlReducer from "./set_site_url_reducer";
+import StartWatchdogReducer from "./start_watchdog_reducer";
 import WrapUpReducer from "./wrap_up_reducer";
 
 // Import all procedure arg schemas
@@ -269,6 +270,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_model_slot", SetModelSlotReducer),
   __reducerSchema("set_provider_key", SetProviderKeyReducer),
   __reducerSchema("set_site_url", SetSiteUrlReducer),
+  __reducerSchema("start_watchdog", StartWatchdogReducer),
   __reducerSchema("wrap_up", WrapUpReducer),
 );
 

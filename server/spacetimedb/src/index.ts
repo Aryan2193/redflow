@@ -262,7 +262,17 @@ const step_schedule = table(
   }
 );
 
+// Procedures can be orphaned by a module republish mid-flight. The watchdog restarts stalled steps.
+const watchdog_schedule = table(
+  { name: 'watchdog_schedule', scheduled: (): any => watchdogTick },
+  {
+    scheduled_id: t.u64().primaryKey().autoInc(),
+    scheduled_at: t.scheduleAt(),
+  }
+);
+
 const spacetimedb = schema({
+  watchdog_schedule,
   config,
   provider,
   model_slot,
@@ -315,6 +325,71 @@ export const init = spacetimedb.init(ctx => {
   ] as const;
   for (const [slot, model, label, useWeb, reasoning] of seed) {
     ctx.db.model_slot.insert({ slot, model, label, providerId: 1, useWeb, enabled: true, reasoning });
+  }
+  ctx.db.watchdog_schedule.insert({ scheduled_id: 0n, scheduled_at: ScheduleAt.interval(30_000_000n) });
+});
+
+// For databases initialized before the watchdog existed.
+export const startWatchdog = spacetimedb.reducer(ctx => {
+  requireOwner(ctx);
+  if ([...ctx.db.watchdog_schedule.iter()].length === 0) {
+    ctx.db.watchdog_schedule.insert({ scheduled_id: 0n, scheduled_at: ScheduleAt.interval(30_000_000n) });
+  }
+});
+
+const STALL_MICROS = 110n * 1_000_000n; // a step that has shown no progress for this long is restarted
+const GIVE_UP_MICROS = 9n * 60n * 1_000_000n; // a question stuck this long is wrapped up so the room never hangs
+
+export const watchdogTick = spacetimedb.reducer({ timer: watchdog_schedule.rowType }, (ctx, _args) => {
+  const now = ctx.timestamp.microsSinceUnixEpoch;
+  const slots = [...ctx.db.model_slot.iter()];
+  const councilSlots = COUNCIL.filter(s => slots.find(x => x.slot === s && x.enabled));
+  for (const q of ctx.db.question.iter()) {
+    if (q.state === 'settled' || q.state === 'failed') continue;
+    const idle = now - q.updatedAt.microsSinceUnixEpoch;
+    if (idle < STALL_MICROS) continue;
+    if (now - q.createdAt.microsSinceUnixEpoch > GIVE_UP_MICROS) {
+      ctx.db.question.id.update({ ...q, wrapRequested: true, lastError: 'took too long, wrapped up by the watchdog', updatedAt: ctx.timestamp });
+      scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'finalize', 'chair');
+      continue;
+    }
+    const statuses = [...ctx.db.agent_status.questionId.filter(q.id)];
+    const stillWorking = (slot: string) => {
+      const s = statuses.find(x => x.slot === slot);
+      return !s || !['done', 'failed', 'idle'].includes(s.state);
+    };
+    let restarted = '';
+    switch (q.state) {
+      case 'drafting': {
+        const have = new Set([...ctx.db.draft.questionId.filter(q.id)].filter(d => d.round === q.round).map(d => d.slot));
+        for (const s of councilSlots) if (!have.has(s) && stillWorking(s)) { scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'draft', s); restarted += s + ' '; }
+        if (!restarted) afterFanInCheck({ db: ctx.db, timestamp: ctx.timestamp, sender: ctx.sender }, q.id, 'draft', slots);
+        break;
+      }
+      case 'moderating':
+        scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'moderate', 'chair');
+        restarted = 'moderate';
+        break;
+      case 'critiquing':
+      case 'dissenting':
+        for (const s of councilSlots) if (stillWorking(s)) { scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, q.state === 'dissenting' ? 'dissent' : 'critique', s); restarted += s + ' '; }
+        if (!restarted) afterFanInCheck({ db: ctx.db, timestamp: ctx.timestamp, sender: ctx.sender }, q.id, 'critique', slots);
+        break;
+      case 'grounding':
+        scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'ground', 'checker');
+        restarted = 'ground';
+        break;
+      case 'synthesizing':
+        scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'synthesize', 'chair');
+        restarted = 'synthesize';
+        break;
+      case 'verifying':
+        for (const s of councilSlots) if (stillWorking(s)) { scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'verify', s); restarted += s + ' '; }
+        if (!restarted) afterFanInCheck({ db: ctx.db, timestamp: ctx.timestamp, sender: ctx.sender }, q.id, 'verify', slots);
+        break;
+    }
+    const fresh = ctx.db.question.id.find(q.id);
+    if (fresh) ctx.db.question.id.update({ ...fresh, lastError: restarted ? `watchdog restarted ${restarted.trim()}` : fresh.lastError, updatedAt: ctx.timestamp });
   }
 });
 

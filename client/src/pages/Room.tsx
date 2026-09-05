@@ -19,7 +19,7 @@ export default function Room({ code }: { code: string }) {
   const enabled = !!room;
 
   const [members] = useTable(tables.member.where(r => r.roomId.eq(roomId)), { enabled });
-  const [questions] = useTable(tables.question.where(r => r.roomId.eq(roomId)), { enabled });
+  const [questions, questionsLoaded] = useTable(tables.question.where(r => r.roomId.eq(roomId)), { enabled });
   const [notes] = useTable(tables.note.where(r => r.roomId.eq(roomId)), { enabled });
   const [slots] = useTable(tables.modelSlot);
 
@@ -55,6 +55,13 @@ export default function Room({ code }: { code: string }) {
 
   const [tab, setTab] = useState<'answer' | 'room'>('answer');
   const [now, setNow] = useState(Date.now());
+  // A room with no question yet opens on the composer, so a first-time visitor sees what to do.
+  const steeredOnce = useRef(false);
+  useEffect(() => {
+    if (steeredOnce.current || !enabled || !questionsLoaded) return;
+    steeredOnce.current = true;
+    if (questions.length === 0) setTab('room');
+  }, [enabled, questionsLoaded, questions.length]);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);

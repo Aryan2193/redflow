@@ -19,6 +19,7 @@ import SetLimitsReducer from "../set_limits_reducer";
 import SetModelSlotReducer from "../set_model_slot_reducer";
 import SetProviderKeyReducer from "../set_provider_key_reducer";
 import SetSiteUrlReducer from "../set_site_url_reducer";
+import StartWatchdogReducer from "../start_watchdog_reducer";
 import WrapUpReducer from "../wrap_up_reducer";
 
 export type AskParams = __Infer<typeof AskReducer>;
@@ -34,5 +35,6 @@ export type SetLimitsParams = __Infer<typeof SetLimitsReducer>;
 export type SetModelSlotParams = __Infer<typeof SetModelSlotReducer>;
 export type SetProviderKeyParams = __Infer<typeof SetProviderKeyReducer>;
 export type SetSiteUrlParams = __Infer<typeof SetSiteUrlReducer>;
+export type StartWatchdogParams = __Infer<typeof StartWatchdogReducer>;
 export type WrapUpParams = __Infer<typeof WrapUpReducer>;
 

@@ -98,7 +98,7 @@ export default function Answer(p: Props) {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted">The answer</p>
         <h2 className="font-display mt-2 text-2xl leading-snug">Nothing asked yet.</h2>
         <p className="mt-3 max-w-md text-ink-2">
-          Ask the room one question from the Room tab. Three models answer it blind, then attack each other's drafts, then a chair rebuilds the answer with every change justified.
+          Ask the room one question. Three models answer it blind, then attack each other's drafts, then a chair rebuilds the answer with every change justified. On a phone, the composer is under the Room tab.
         </p>
         {p.room.brief && (
           <div className="mt-6 rounded-md border border-line bg-sheet p-4 text-sm text-ink-2">
@@ -128,7 +128,7 @@ export default function Answer(p: Props) {
         )}
       </div>
 
-      {openTeamQs.length > 0 && (
+      {openTeamQs.length > 0 && busy && (
         <div className="mt-5 rounded-lg border border-warn bg-warn-soft/60 p-4">
           <div className="text-xs font-semibold uppercase tracking-wider text-warn">The room asks you</div>
           <p className="mt-1 text-sm text-ink-2">Only your team can answer these. Anyone can reply; the agents read it on their next turn.</p>

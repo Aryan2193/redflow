@@ -216,3 +216,9 @@ export const TeamQuestion = __t.object("TeamQuestion", {
 });
 export type TeamQuestion = __Infer<typeof TeamQuestion>;
 
+export const WatchdogSchedule = __t.object("WatchdogSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type WatchdogSchedule = __Infer<typeof WatchdogSchedule>;
+
