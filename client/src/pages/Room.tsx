@@ -176,7 +176,7 @@ export default function Room({ code }: { code: string }) {
         {explain && (
           <div className="border-t border-line-2 bg-sheet px-4 py-3 text-sm text-ink-2">
             <ol className="list-decimal space-y-1 pl-5">
-              <li>You ask one question. {table[0]?.label ?? 'The lead'} writes the best full answer it can. That is version one, on screen in about twenty seconds.</li>
+              <li>You ask one question. {table[0]?.label ?? 'The lead'} writes the best full answer it can. That is version one, on screen in under a minute.</li>
               <li>{table.slice(1).map(s => s.label).join(' and ')} draft their own view blind, then attack the answer on substance. Each objection must say what would make it right.</li>
               <li>Disputed facts are checked on the web. Then {table[0]?.label ?? 'the lead'} revises. Every change must cite an objection, a source, or your note, or the system refuses it.</li>
               <li>A critic confirms the fixes hold. Anything still standing shows as an open risk. Nothing quietly disappears.</li>
