@@ -25,45 +25,62 @@ export const STATUS_HELP: Record<string, string> = {
   verified: 'A source was checked and supports this.',
   agreed: 'The critics found nothing to change here.',
   contested: 'An objection is still open against this.',
-  unresolved: 'An objection stood when the round ended. Read it below.',
+  unresolved: 'An objection stood when the round ended.',
 };
 
-// Colors for the people at the table. Lead is the brand red.
+// Who is talking. Each model has one color for the whole room; humans are ink.
+export type Tone = 'red' | 'teal' | 'slate' | 'ink';
+export type Speaker = { key: string; name: string; role: string; tone: Tone; human: boolean };
+
+const SLOT_TONE: Record<string, Tone> = { council_a: 'red', chair: 'red', council_b: 'teal', checker: 'teal', council_c: 'slate' };
+const SLOT_ROLE: Record<string, string> = { council_a: 'lead', chair: 'lead', council_b: 'critic', council_c: 'critic', checker: 'fact check' };
+
+export function speakerFor(slot: string, slots: readonly ModelSlot[]): Speaker {
+  const key = slot === 'chair' ? 'council_a' : slot;
+  const row = slots.find(s => s.slot === key) ?? slots.find(s => s.slot === slot);
+  return { key, name: row?.label ?? slot, role: SLOT_ROLE[key] ?? '', tone: SLOT_TONE[key] ?? 'ink', human: false };
+}
+
+export function humanSpeaker(name: string): Speaker {
+  return { key: 'human:' + name, name, role: '', tone: 'ink', human: true };
+}
+
+export const TONE_TEXT: Record<Tone, string> = { red: 'text-red', teal: 'text-teal', slate: 'text-slate', ink: 'text-ink' };
+export const TONE_BG: Record<Tone, string> = { red: 'bg-red', teal: 'bg-teal', slate: 'bg-slate', ink: 'bg-ink' };
+export const TONE_BUB: Record<Tone, string> = { red: 'bub-red', teal: 'bub-teal', slate: 'bub-slate', ink: 'bub-human' };
+
+// Legacy dot colors used by the header chips.
 export function slotColor(slot: string): string {
-  switch (slot) {
-    case 'council_a':
-    case 'chair':
-      return 'bg-red';
-    case 'council_b':
-    case 'checker':
-      return 'bg-teal';
-    case 'council_c':
-      return 'bg-slate';
+  return TONE_BG[SLOT_TONE[slot] ?? 'ink'];
+}
+
+export type StateLook = { label: string; hl: string; chip: string };
+
+export function objectionState(status: string): StateLook {
+  switch (status) {
+    case 'open':
+      return { label: 'Open', hl: 'hl-red', chip: 'bg-red-soft text-red' };
+    case 'addressed':
+      return { label: 'Fix awaiting check', hl: 'hl-warn', chip: 'bg-warn-soft text-warn' };
+    case 'withdrawn':
+      return { label: 'Fixed', hl: 'hl-ok', chip: 'bg-ok-soft text-ok' };
+    case 'overruled':
+      return { label: 'Overruled', hl: 'hl-judg', chip: 'bg-judg-soft text-judg' };
+    case 'unresolved':
+      return { label: 'Open risk', hl: 'hl-red', chip: 'bg-red text-paper' };
     default:
-      return 'bg-ink';
+      return { label: status, hl: 'hl-judg', chip: 'bg-judg-soft text-judg' };
   }
 }
 
-export const STAGES = ['Drafting', 'Critique', 'Fact check', 'Revision', 'Settled'] as const;
-
-export function stageIndex(q: Question): number {
-  switch (q.state) {
-    case 'drafting':
-      return 0;
-    case 'critiquing':
-    case 'dissenting':
-      return 1;
-    case 'grounding':
-      return 2;
-    case 'synthesizing':
-      return 3;
-    case 'verifying':
-      return 3;
-    case 'settled':
-    case 'failed':
-      return 4;
+export function evidenceState(verdict: string): StateLook {
+  switch (verdict) {
+    case 'supported':
+      return { label: 'Supported', hl: 'hl-ok', chip: 'bg-ok-soft text-ok' };
+    case 'refuted':
+      return { label: 'Refuted', hl: 'hl-red', chip: 'bg-red-soft text-red' };
     default:
-      return 0;
+      return { label: 'Unclear', hl: 'hl-warn', chip: 'bg-warn-soft text-warn' };
   }
 }
 
@@ -86,7 +103,7 @@ export function narrative(q: Question, statuses: readonly AgentStatus[], slots: 
     case 'verifying':
       return `${label('council_b')} is checking whether the fixes actually hold.`;
     case 'settled':
-      return openRisks > 0 ? `Settled with ${openRisks} open risk${openRisks === 1 ? '' : 's'}, shown below.` : 'Settled. Every objection was resolved.';
+      return openRisks > 0 ? `Settled with ${openRisks} open risk${openRisks === 1 ? '' : 's'}.` : 'Settled. Every objection was resolved.';
     case 'failed':
       return 'The room hit a problem and stopped.';
     default:

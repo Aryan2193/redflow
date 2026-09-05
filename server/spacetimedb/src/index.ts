@@ -1082,7 +1082,7 @@ Shape it to the kind of question:
 
 Rules for the document:
 - 450 to 800 words in 3 to 7 sections. Each heading is 2 to 7 words in sentence case (capitalize only the first word and names) and says something specific (never Introduction, Overview, Background, Summary, Conclusion, Next steps).
-- Section one is the recommendation in at most four sentences, with the key number or name in it.
+- Section one is the recommendation: at most four sentences and under 90 words, with the key number or name in it. It is shown on its own as the room's verdict, so it must carry the decision by itself. Detail goes in the later sections.
 - Later sections carry the reasoning, the options you rejected and why, the concrete numbers, the risks that could change the call, and the first steps for the next seven days.
 - Use the team's own facts from <room_brief> and <team_notes>. Where a note shaped a section, say so in the body using the author's first name.
 - Generic advice is a failure. "Consult a professional" is allowed only when the law requires it, and then name which professional and for what.
