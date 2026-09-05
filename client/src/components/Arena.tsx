@@ -5,7 +5,66 @@ import { TONE_TEXT, speakerFor } from '../lib/labels';
 import { useMediaQuery } from '../lib/reveal';
 import Presence from './Activity';
 import ItemCard, { type CardCtx } from './Cards';
+import Fighter, { type FighterState, type Moment } from './Fighter';
 import Verdict from './Verdict';
+import { microStep } from '../lib/narrate';
+import { toDate } from '../lib/stdb';
+
+// Bursts of motion for the figures, derived from what just changed: a new objection is a strike on the lead, an
+// overruled one staggers its author, a supported claim is a shield, a decision is a cheer. Only fresh rows fire, so a
+// page opened on an old bout stays calm.
+function useMoments(objections: readonly Objection[], evidence: readonly Evidence[], q: Question, now: number): Record<string, Moment> {
+  const [moments, setMoments] = useState<Record<string, Moment>>({});
+  const prev = useRef<{ obj: Map<string, string>; ev: Set<string>; settled: boolean; init: boolean }>({ obj: new Map(), ev: new Set(), settled: false, init: false });
+  useEffect(() => {
+    const fresh = (ts: { microsSinceUnixEpoch: bigint }) => now - toDate(ts).getTime() < 12_000;
+    const fire: Record<string, Moment> = {};
+    const cur = new Map(objections.map(o => [o.id.toString(), o.status]));
+    if (prev.current.init) {
+      for (const o of objections) {
+        const before = prev.current.obj.get(o.id.toString());
+        if (before === undefined) {
+          if (fresh(o.createdAt)) {
+            fire[o.bySlot] = 'strike';
+            fire.council_a = 'hit';
+          }
+        } else if (before !== o.status && fresh(o.updatedAt)) {
+          if (o.status === 'overruled') {
+            fire[o.bySlot] = 'stagger';
+            fire.council_a = 'shield';
+          } else if (o.status === 'withdrawn') fire[o.bySlot] = 'cheer';
+          else if (o.status === 'addressed') fire.council_a = 'strike';
+        }
+      }
+      for (const e of evidence) {
+        if (prev.current.ev.has(e.id.toString()) || !fresh(e.createdAt)) continue;
+        if (e.verdict === 'refuted') fire.council_a = 'hit';
+        else if (e.verdict === 'supported') fire.council_a = 'shield';
+      }
+      const settledNow = q.state === 'settled';
+      if (settledNow && !prev.current.settled && q.settledAt && fresh(q.settledAt)) {
+        fire.council_a = 'cheer';
+        fire.council_b = 'cheer';
+        fire.council_c = 'cheer';
+      }
+    }
+    prev.current = { obj: cur, ev: new Set(evidence.map(e => e.id.toString())), settled: q.state === 'settled', init: true };
+    if (!Object.keys(fire).length) return;
+    setMoments(m => ({ ...m, ...fire }));
+    const t = setTimeout(
+      () =>
+        setMoments(m => {
+          const n = { ...m };
+          for (const k of Object.keys(fire)) delete n[k];
+          return n;
+        }),
+      1300
+    );
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [objections, evidence, q.state]);
+  return moments;
+}
 
 type Props = {
   room: Room;
@@ -164,6 +223,30 @@ export default function Arena(p: Props) {
   const ctx: CardCtx = { paragraphs: p.paragraphs, objections: p.objections, evidence: p.evidence, notes: p.notes, slots: p.slots, now: p.now, leadName };
   const openRisks = p.objections.filter(o => o.status === 'unresolved').length;
 
+  // The figures: one per model, standing with its presence block.
+  const moments = useMoments(p.objections, p.evidence, q, p.now);
+  const same = (slot: string, s: string) => s === slot || (slot === 'council_a' && s === 'chair') || (slot === 'council_b' && s === 'checker');
+  const stateFor = (slot: string): FighterState => (p.statuses.some(s => same(slot, s.slot) && ACTIVE_STATES.has(s.state)) ? 'working' : 'idle');
+  const lineFor = (slot: string): string => {
+    const st = p.statuses.find(s => same(slot, s.slot) && ACTIVE_STATES.has(s.state));
+    if (st) return microStep(st.state, st.slot, p.now - toDate(st.updatedAt).getTime());
+    const last = [...p.events].filter(e => same(slot, e.slot)).sort((a, b) => Number(b.id - a.id))[0];
+    if (last) return last.detail;
+    return settled ? 'Done for today.' : 'Ready.';
+  };
+  const figure = (slot: string, facing: 'left' | 'right', size = 84) => {
+    const sp = speakerFor(slot, p.slots);
+    return <Fighter tone={sp.tone} name={sp.name} state={stateFor(slot)} moment={moments[slot] ?? null} facing={facing} line={lineFor(slot)} size={size} />;
+  };
+  const stand = (slot: string, side: 'left' | 'right', size = 84, max = 3) => (
+    <div className={`flex items-end gap-1 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
+      {figure(slot, side === 'left' ? 'right' : 'left', size)}
+      <div className="min-w-0 flex-1">
+        <Presence slot={slot} slots={p.slots} events={p.events} statuses={p.statuses} align={side} max={max} />
+      </div>
+    </div>
+  );
+
   const verdict = settled ? (
     <div className="verdict-in">
       <Verdict room={p.room} question={q} paragraphs={p.paragraphs} objections={p.objections} evidence={p.evidence} notes={p.notes} slots={p.slots} now={p.now} myName={p.myName} />
@@ -182,10 +265,10 @@ export default function Arena(p: Props) {
   if (!wide) {
     // One column on a phone: cards lean to their corner, the ring runs down the middle.
     const tail = (
-      <div className="space-y-1.5 rounded-xl border border-line-2 bg-sheet/70 px-1 py-1.5">
-        <Presence slot="council_a" slots={p.slots} events={p.events} statuses={p.statuses} max={2} />
-        <Presence slot="council_b" slots={p.slots} events={p.events} statuses={p.statuses} max={2} />
-        <Presence slot="council_c" slots={p.slots} events={p.events} statuses={p.statuses} max={2} />
+      <div className="space-y-1 rounded-xl border border-line-2 bg-sheet/70 px-1 py-1.5">
+        {stand('council_a', 'left', 60, 2)}
+        {stand('council_b', 'right', 60, 2)}
+        {stand('council_c', 'right', 60, 2)}
       </div>
     );
     return (
@@ -205,7 +288,7 @@ export default function Arena(p: Props) {
     <div className="arena relative mx-auto grid min-h-0 w-full max-w-[1400px] min-w-0 flex-1 gap-3 overflow-hidden px-3 pb-2 sm:px-5" style={{ gridTemplateColumns: cols }}>
       <div className={`flex min-h-0 min-w-0 flex-col ${settled ? 'opacity-80' : ''}`}>
         <CornerHeader corner="left" slots={p.slots} statuses={p.statuses} />
-        <Column items={byCorner.left} ctx={ctx} isOpen={isOpen} toggle={toggle} tint={tintL} tail={<Presence slot="council_a" slots={p.slots} events={p.events} statuses={p.statuses} />} />
+        <Column items={byCorner.left} ctx={ctx} isOpen={isOpen} toggle={toggle} tint={tintL} tail={stand('council_a', 'left')} />
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-col">
@@ -238,9 +321,9 @@ export default function Arena(p: Props) {
           toggle={toggle}
           tint={tintR}
           tail={
-            <div className="space-y-1.5">
-              <Presence slot="council_b" slots={p.slots} events={p.events} statuses={p.statuses} align="right" />
-              <Presence slot="council_c" slots={p.slots} events={p.events} statuses={p.statuses} align="right" />
+            <div className="space-y-1">
+              {stand('council_b', 'right')}
+              {stand('council_c', 'right')}
             </div>
           }
         />

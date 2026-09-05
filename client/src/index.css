@@ -522,6 +522,182 @@ body {
   transition: grid-template-columns 600ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ------------------------------------------------------------------------------------------ */
+/* The fighters: small human figures, one per model                                            */
+/* ------------------------------------------------------------------------------------------ */
+
+.fig svg {
+  overflow: visible;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.fig .fig-body {
+  transform-origin: 32px 52px;
+  animation: fig-breathe 3.2s ease-in-out infinite;
+}
+.fig .fig-eye {
+  animation: fig-blink 4.5s steps(1) infinite;
+}
+.fig-working .fig-arm-near {
+  animation: fig-type 0.42s ease-in-out infinite;
+}
+.fig-working .fig-arm-far {
+  animation: fig-type 0.42s ease-in-out infinite 0.21s;
+}
+.fig-working .fig-head {
+  animation: fig-nod 1.6s ease-in-out infinite;
+}
+.fig-hit svg {
+  animation: fig-hit 700ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.fig-hit .fig-mouth {
+  d: path('M29 22 Q32 19 35 22');
+}
+.fig-strike svg {
+  animation: fig-strike 620ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.fig-strike .fig-arm-near {
+  animation: fig-punch 620ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.fig-shield .fig-arm-near,
+.fig-shield .fig-arm-far {
+  animation: fig-guard 900ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.fig-cheer .fig-arm-near,
+.fig-cheer .fig-arm-far {
+  animation: fig-cheer 1.2s cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.fig-cheer svg {
+  animation: fig-hop 1.2s cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.fig-stagger svg {
+  animation: fig-stagger 800ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.fig-bubble {
+  animation: enter-c 220ms cubic-bezier(0.16, 1, 0.3, 1) 1 both;
+}
+@keyframes fig-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.025);
+  }
+}
+@keyframes fig-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes fig-type {
+  0%,
+  100% {
+    transform: rotate(-38deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-38deg) translateY(-3px);
+  }
+}
+@keyframes fig-nod {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes fig-hit {
+  0% {
+    transform: var(--fig-flip, none) translateX(0) rotate(0);
+    filter: none;
+  }
+  25% {
+    transform: var(--fig-flip, none) translateX(-10px) rotate(-8deg);
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-red) 70%, transparent));
+  }
+  100% {
+    transform: var(--fig-flip, none) translateX(0) rotate(0);
+    filter: none;
+  }
+}
+@keyframes fig-strike {
+  0%,
+  100% {
+    transform: var(--fig-flip, none) translateX(0);
+  }
+  40% {
+    transform: var(--fig-flip, none) translateX(16px);
+  }
+}
+@keyframes fig-punch {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  40% {
+    transform: rotate(-95deg) translateY(-4px);
+  }
+}
+@keyframes fig-guard {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  30%,
+  70% {
+    transform: rotate(-120deg);
+  }
+}
+@keyframes fig-cheer {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  30%,
+  80% {
+    transform: rotate(-170deg);
+  }
+}
+@keyframes fig-hop {
+  0%,
+  100% {
+    transform: var(--fig-flip, none) translateY(0);
+  }
+  35% {
+    transform: var(--fig-flip, none) translateY(-8px);
+  }
+  55% {
+    transform: var(--fig-flip, none) translateY(0);
+  }
+  70% {
+    transform: var(--fig-flip, none) translateY(-4px);
+  }
+}
+@keyframes fig-stagger {
+  0%,
+  100% {
+    transform: var(--fig-flip, none) rotate(0);
+  }
+  30% {
+    transform: var(--fig-flip, none) rotate(10deg) translateX(6px);
+  }
+  60% {
+    transform: var(--fig-flip, none) rotate(-4deg);
+  }
+}
+.fig-faces-left {
+  --fig-flip: scale(-1, 1);
+}
+.fig-faces-right {
+  --fig-flip: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landed,
   .pulse,
@@ -534,7 +710,13 @@ body {
   .hit,
   .verdict-in,
   .typing span,
-  .caret::after {
+  .caret::after,
+  .fig .fig-body,
+  .fig .fig-eye,
+  .fig .fig-arm,
+  .fig .fig-head,
+  .fig svg,
+  .fig-bubble {
     animation: none;
   }
   .round-banner {
