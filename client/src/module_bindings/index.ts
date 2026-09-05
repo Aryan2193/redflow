@@ -39,6 +39,7 @@ import CreateRoomReducer from "./create_room_reducer";
 import GoDeeperReducer from "./go_deeper_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import LeaveRoomReducer from "./leave_room_reducer";
+import OpenRoomReducer from "./open_room_reducer";
 import PostNoteReducer from "./post_note_reducer";
 import RequestVerdictEmailReducer from "./request_verdict_email_reducer";
 import SetEmailProviderReducer from "./set_email_provider_reducer";
@@ -262,6 +263,7 @@ const reducersSchema = __reducers(
   __reducerSchema("go_deeper", GoDeeperReducer),
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("leave_room", LeaveRoomReducer),
+  __reducerSchema("open_room", OpenRoomReducer),
   __reducerSchema("post_note", PostNoteReducer),
   __reducerSchema("request_verdict_email", RequestVerdictEmailReducer),
   __reducerSchema("set_email_provider", SetEmailProviderReducer),

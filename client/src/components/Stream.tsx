@@ -3,6 +3,7 @@ import { useReducer } from 'spacetimedb/react';
 import { reducers } from '../module_bindings';
 import type { AgentStatus, AnswerVersion, Draft, Evidence, Member, ModelSlot, Note, Objection, Question, Room, TeamQuestion } from '../module_bindings/types';
 import { idHex, timeAgo, toDate } from '../lib/stdb';
+import { useAutosize } from '../lib/autosize';
 
 type Props = {
   room: Room;
@@ -31,7 +32,11 @@ export default function Stream(p: Props) {
   const [err, setErr] = useState('');
   const [hint, setHint] = useState('');
   const [sending, setSending] = useState(false);
-  const bottom = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true); // only follow new items when the reader is already at the end
+  const forceScroll = useRef(false); // after our own message, always follow
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  useAutosize(taRef, text, 200);
 
   const q = p.question;
   const canAsk = !q || q.state === 'settled' || q.state === 'failed';
@@ -168,7 +173,12 @@ export default function Stream(p: Props) {
   }, [p.notes, p.drafts, p.teamQs, p.objections, p.evidence, p.versions, q, p.me, p.now, p.slots]);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' });
+    const el = listRef.current;
+    if (!el) return;
+    if (nearBottom.current || forceScroll.current) {
+      el.scrollTop = el.scrollHeight;
+      forceScroll.current = false;
+    }
   }, [items.length]);
 
   async function send(e: React.FormEvent) {
@@ -181,6 +191,7 @@ export default function Stream(p: Props) {
       if (canAsk) await ask({ roomId: p.room.id, text: body });
       else await postNote({ roomId: p.room.id, text: body, teamQuestionId: 0n });
       setText('');
+      forceScroll.current = true;
       setHint(!canAsk && q && q.state === 'settled' ? 'The answer has settled. Press Go deeper on the Answer tab to make the room take this into account.' : '');
     } catch (e2) {
       setErr(String((e2 as Error)?.message ?? e2));
@@ -195,7 +206,14 @@ export default function Stream(p: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 pb-4 pt-4">
+      <div
+        ref={listRef}
+        onScroll={e => {
+          const el = e.currentTarget;
+          nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+        }}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 pt-4"
+      >
         {justJoined && myMember && (
           <div className="rounded-lg bg-warn-soft/60 px-3 py-2 text-sm text-ink-2">
             <span className="font-semibold text-ink">Welcome, {myMember.name}.</span> This room is deciding: {p.room.title}.{' '}
@@ -221,10 +239,9 @@ export default function Stream(p: Props) {
             ))}
           </div>
         )}
-        <div ref={bottom} />
       </div>
 
-      <form onSubmit={send} className="sticky bottom-0 border-t border-line bg-paper px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
+      <form onSubmit={send} className="shrink-0 border-t border-line bg-paper px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
         {queued > 0 && (
           <div className="mb-1.5 text-xs text-muted">
             {queued} note{queued === 1 ? '' : 's'} waiting for the agents' next turn
@@ -232,6 +249,7 @@ export default function Stream(p: Props) {
         )}
         <div className="flex items-end gap-2">
           <textarea
+            ref={taRef}
             value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={e => {
@@ -240,7 +258,7 @@ export default function Stream(p: Props) {
                 void send(e as unknown as React.FormEvent);
               }
             }}
-            rows={2}
+            rows={1}
             placeholder={canAsk ? 'Ask the room one question' : 'Add context or a correction. The agents read it on their next turn.'}
             className="flex-1 resize-none rounded-md border border-line bg-sheet px-3 py-2 outline-none focus:border-ink"
             maxLength={2000}

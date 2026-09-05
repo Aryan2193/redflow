@@ -114,6 +114,7 @@ export default function Answer(p: Props) {
   const firstDraft = p.drafts.find(d => d.label === 'A') ?? p.drafts[0];
   const busy = q && !['settled', 'failed'].includes(q.state);
   const sortedVersions = [...p.versions].sort((a, b) => a.version - b.version);
+  const latest = sortedVersions[sortedVersions.length - 1];
 
   if (!q) {
     return (
@@ -151,10 +152,19 @@ export default function Answer(p: Props) {
         )}
       </div>
 
-      {openTeamQs.length > 0 && busy && (
+      {latest && (
+        <div className={`mt-3 rounded-md border border-line bg-sheet px-3 py-2 text-sm text-ink-2 ${p.now - toDate(latest.createdAt).getTime() < 9000 ? 'landed' : ''}`}>
+          <span className="font-mono text-xs text-muted">v{latest.version}</span> {latest.summary}
+        </div>
+      )}
+
+      {openTeamQs.length > 0 && (
         <div className="mt-5 rounded-lg border border-warn bg-warn-soft/60 p-4">
           <div className="text-xs font-semibold uppercase tracking-wider text-warn">The room asks you</div>
-          <p className="mt-1 text-sm text-ink-2">Only your team can answer these. Anyone can reply; the agents read it on their next turn.</p>
+          <p className="mt-1 text-sm text-ink-2">
+            Only your team can answer these. Anyone can reply.{' '}
+            {busy ? 'The agents read it on their next turn.' : 'The answer has settled, so your reply feeds the next round. Press Go deeper after answering.'}
+          </p>
           <ul className="mt-3 space-y-3">
             {openTeamQs.map(t => (
               <li key={t.id.toString()}>

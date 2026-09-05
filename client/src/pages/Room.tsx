@@ -57,6 +57,13 @@ export default function Room({ code }: { code: string }) {
   const [tab, setTab] = useState<'answer' | 'room'>('answer');
   const [copied, setCopied] = useState(false);
   const [explain, setExplain] = useState(false);
+  // Marker on the Answer tab when a version landed while the reader was on the Room tab.
+  const [seenVersion, setSeenVersion] = useState(0);
+  const currentVersion = question?.version ?? 0;
+  useEffect(() => {
+    if (tab === 'answer') setSeenVersion(currentVersion);
+  }, [tab, currentVersion]);
+  const answerChanged = currentVersion > seenVersion;
   const [now, setNow] = useState(Date.now());
   // A room with no question yet opens on the composer, so a first-time visitor sees what to do.
   const steeredOnce = useRef(false);
@@ -134,8 +141,8 @@ export default function Room({ code }: { code: string }) {
   const online = members.filter(m => m.online);
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-6xl flex-col">
-      <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur">
+    <div className="mx-auto flex h-dvh max-w-6xl flex-col">
+      <header className="shrink-0 border-b border-line bg-paper">
         <div className="flex items-center gap-3 px-4 py-2.5">
           <button onClick={() => navigate('/')} className="flex items-center gap-2" aria-label="Redflow home">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-red" aria-hidden />
@@ -190,16 +197,17 @@ export default function Room({ code }: { code: string }) {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2 text-sm font-semibold ${tab === t ? 'border-b-2 border-ink text-ink' : 'text-muted'}`}
+              className={`relative flex-1 py-2 text-sm font-semibold ${tab === t ? 'border-b-2 border-ink text-ink' : 'text-muted'}`}
             >
               {t === 'answer' ? 'Answer' : 'Room'}
+              {t === 'answer' && answerChanged && <span className="absolute right-6 top-2 inline-block h-2 w-2 rounded-full bg-red" aria-label="The answer changed" />}
             </button>
           ))}
         </div>
       </header>
 
-      <div className="grid flex-1 md:grid-cols-12">
-        <section className={`${tab === 'answer' ? 'block' : 'hidden'} md:col-span-7 md:block md:border-r md:border-line`}>
+      <div className="grid min-h-0 flex-1 md:grid-cols-12">
+        <section className={`${tab === 'answer' ? 'block' : 'hidden'} min-h-0 overflow-y-auto md:col-span-7 md:block md:border-r md:border-line`}>
           <Answer
             room={room}
             question={question}
@@ -215,7 +223,7 @@ export default function Room({ code }: { code: string }) {
             myName={myMember.name}
           />
         </section>
-        <section className={`${tab === 'room' ? 'flex' : 'hidden'} flex-col md:col-span-5 md:flex`}>
+        <section className={`${tab === 'room' ? 'flex' : 'hidden'} min-h-0 flex-col md:col-span-5 md:flex`}>
           <Stream
             room={room}
             question={question}

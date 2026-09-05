@@ -576,24 +576,58 @@ export const postNote = spacetimedb.reducer(
   }
 );
 
+// Title for a room opened straight from a question: the first clause, cut at a word boundary.
+function deriveTitle(question: string) {
+  const firstSentence = question.trim().split(/(?<=[.?!])\s+/)[0] ?? question.trim();
+  if (firstSentence.length <= 72) return firstSentence;
+  const cut = firstSentence.slice(0, 72);
+  return cut.slice(0, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 72).trim() + '...';
+}
+
+// One step: open a room and ask. The room is titled from the question. Notes can add context later.
+export const openRoom = spacetimedb.reducer({ name: t.string(), question: t.string() }, (ctx, { name, question }) => {
+  const cfg = ctx.db.config.id.find(0)!;
+  if (cfg.killSwitch) throw new SenderError('rooms are paused right now');
+  const who = cleanName(name);
+  const body = question.trim().slice(0, 2000);
+  if (body.length < 8) throw new SenderError('ask a fuller question');
+  const r = ctx.db.room.insert({
+    id: 0n,
+    code: makeCode(ctx),
+    title: deriveTitle(body),
+    brief: '',
+    createdBy: ctx.sender,
+    createdAt: ctx.timestamp,
+    questionCount: 0,
+    callsUsed: 0,
+  });
+  upsertMember(ctx, r.id, who);
+  startQuestion(ctx, r.id, who, body);
+});
+
 export const ask = spacetimedb.reducer({ roomId: t.u64(), text: t.string() }, (ctx, { roomId, text }) => {
   const cfg = ctx.db.config.id.find(0)!;
   if (cfg.killSwitch) throw new SenderError('the room is paused right now');
   const m = requireMember(ctx, roomId);
-  const r = ctx.db.room.id.find(roomId);
-  if (!r) throw new SenderError('no such room');
-  if (r.questionCount >= cfg.maxQuestionsPerRoom) throw new SenderError('this room has used its questions for now');
   const body = text.trim().slice(0, 2000);
   if (body.length < 8) throw new SenderError('ask a fuller question');
   const current = activeQuestion(ctx.db, roomId);
   if (current && current.state !== 'settled' && current.state !== 'failed') {
     throw new SenderError('one question at a time. Add a note, or wrap up the current one');
   }
+  startQuestion(ctx, roomId, m.name, body);
+});
+
+function startQuestion(ctx: Ctx, roomId: bigint, askerName: string, body: string) {
+  const cfg = ctx.db.config.id.find(0)!;
+  const r = ctx.db.room.id.find(roomId);
+  if (!r) throw new SenderError('no such room');
+  if (r.questionCount >= cfg.maxQuestionsPerRoom) throw new SenderError('this room has used its questions for now');
   const q = ctx.db.question.insert({
     id: 0n,
     roomId,
     askedBy: ctx.sender,
-    askedByName: m.name,
+    askedByName: askerName,
     text: body,
     state: 'drafting',
     round: 1,
@@ -616,7 +650,7 @@ export const ask = spacetimedb.reducer({ roomId: t.u64(), text: t.string() }, (c
     scheduleStep(ctx.db, ctx.timestamp, q.id, 1, 'draft', slot);
     setAgentStatus(ctx.db, ctx.timestamp, q.id, slot, 'reading', 'reading the brief and the question');
   }
-});
+}
 
 export const wrapUp = spacetimedb.reducer({ questionId: t.u64() }, (ctx, { questionId }) => {
   const q = ctx.db.question.id.find(questionId);
