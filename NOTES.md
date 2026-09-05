@@ -78,3 +78,7 @@
 
 ## 20:40 first outside users
 - Rooms on Maincloud: 6. Room 672H opened by "Richa" (mentor?), 2 questions, 3 notes consumed, one question taken to v3 via go deeper (21 calls). All 8 questions settled, 0 errors. Spend $0.74 total, $17.44 left.
+
+## 21:48
+- Trap found via mentor room 672H: after settle the composer flipped to ask mode and a one-word reply became question 8 "answered". Fixed: ask mode is explicit after the first question; server rejects questions under 15 chars or 3 words; team questions answerable inline in the stream.
+- Module republished both servers; preview dist rebuilt; Pages staging refreshed.
