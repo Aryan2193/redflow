@@ -75,3 +75,6 @@
 
 ## 20:27
 - Stable test build served by vite preview on :4173 (LAN http://10.155.96.27:4173, Maincloud). Dev server :5173 reloads on every edit; do not hand :5173 to testers.
+
+## 20:40 first outside users
+- Rooms on Maincloud: 6. Room 672H opened by "Richa" (mentor?), 2 questions, 3 notes consumed, one question taken to v3 via go deeper (21 calls). All 8 questions settled, 0 errors. Spend $0.74 total, $17.44 left.
