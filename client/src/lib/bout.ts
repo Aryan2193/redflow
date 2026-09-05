@@ -158,12 +158,6 @@ export function buildBout(p: BoutInput): BoutItem[] {
     out.push({ kind: 'ruling', key: 'vf' + r, at: when, corner: 'center', stage: 'ruling', round: r, speaker: speakerFor(verifierSlot, p.slots), group });
   }
 
-  if (!settled) {
-    const working = [...p.statuses].filter(s => ACTIVE_STATES.has(s.state)).sort((a, b) => Number(b.slot === 'council_a') - Number(a.slot === 'council_a'));
-    working.forEach((s, i) => {
-      out.push({ kind: 'typing', key: 'typing' + s.slot, at: Number.MAX_SAFE_INTEGER - 10 + i, corner: cornerOf(s.slot), stage: '', round: 0, speaker: speakerFor(s.slot, p.slots), s });
-    });
-  }
-
+  // Who is working right now is shown by each model's presence block under its cards, not as a card.
   return out.sort((a, b) => a.at - b.at);
 }

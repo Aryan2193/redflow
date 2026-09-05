@@ -3,7 +3,7 @@ import type { AgentEvent, AgentStatus, AnswerVersion, Draft, Evidence, ModelSlot
 import { ACTIVE_STATES, ROUNDS, buildBout, cornerOf, roundIndex, type BoutItem, type Corner } from '../lib/bout';
 import { TONE_TEXT, speakerFor } from '../lib/labels';
 import { useMediaQuery } from '../lib/reveal';
-import Activity from './Activity';
+import Presence from './Activity';
 import ItemCard, { type CardCtx } from './Cards';
 import Verdict from './Verdict';
 
@@ -26,7 +26,6 @@ type Props = {
 // How many of the newest cards in a column stay open. Everything older folds to one line.
 // The lead's cards are long (a full answer, a full comeback), so its corner shows one at a time.
 const OPEN_PER_CORNER: Record<Corner, number> = { left: 1, center: 2, right: 2 };
-const CORNER_SLOTS: Record<Corner, string[]> = { left: ['council_a', 'chair'], right: ['council_b', 'council_c'], center: ['checker'] };
 
 function CornerHeader({ corner, slots, statuses }: { corner: Corner; slots: readonly ModelSlot[]; statuses: readonly AgentStatus[] }) {
   const fighters = slots.filter(s => s.enabled && s.slot.startsWith('council') && cornerOf(s.slot) === corner);
@@ -52,8 +51,8 @@ function CornerHeader({ corner, slots, statuses }: { corner: Corner; slots: read
 }
 
 // A column that stacks upward: newest at the bottom, always visible, never scrolling the page.
-function Column(props: { items: BoutItem[]; ctx: CardCtx; isOpen: (k: string) => boolean; toggle: (k: string) => void; tint: string; className?: string; footer?: ReactNode; lean?: boolean }) {
-  const { items, ctx, isOpen, toggle, tint, className = '', footer, lean } = props;
+function Column(props: { items: BoutItem[]; ctx: CardCtx; isOpen: (k: string) => boolean; toggle: (k: string) => void; tint: string; className?: string; footer?: ReactNode; tail?: ReactNode; lean?: boolean }) {
+  const { items, ctx, isOpen, toggle, tint, className = '', footer, tail, lean } = props;
   const ref = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const footRef = useRef<HTMLDivElement>(null);
@@ -96,6 +95,7 @@ function Column(props: { items: BoutItem[]; ctx: CardCtx; isOpen: (k: string) =>
             <ItemCard item={it} ctx={ctx} expanded={isOpen(it.key)} onToggle={() => toggle(it.key)} />
           </div>
         ))}
+        {tail}
         {footer && <div ref={footRef}>{footer}</div>}
       </div>
     </div>
@@ -181,11 +181,16 @@ export default function Arena(p: Props) {
 
   if (!wide) {
     // One column on a phone: cards lean to their corner, the ring runs down the middle.
-    const all = [...CORNER_SLOTS.left, ...CORNER_SLOTS.right, ...CORNER_SLOTS.center];
+    const tail = (
+      <div className="space-y-1.5 rounded-xl border border-line-2 bg-sheet/70 px-1 py-1.5">
+        <Presence slot="council_a" slots={p.slots} events={p.events} statuses={p.statuses} max={2} />
+        <Presence slot="council_b" slots={p.slots} events={p.events} statuses={p.statuses} max={2} />
+        <Presence slot="council_c" slots={p.slots} events={p.events} statuses={p.statuses} max={2} />
+      </div>
+    );
     return (
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <Activity slots={all} events={p.events} statuses={p.statuses} max={3} />
-        <Column items={items} ctx={ctx} isOpen={k => (k === 'q' ? true : isOpen(k))} toggle={toggle} tint="transparent" className="h-full" footer={verdict} lean />
+        <Column items={items} ctx={ctx} isOpen={k => (k === 'q' ? true : isOpen(k))} toggle={toggle} tint="transparent" className="h-full" tail={settled ? null : tail} footer={verdict} lean />
         {bannerNode}
       </div>
     );
@@ -200,8 +205,7 @@ export default function Arena(p: Props) {
     <div className="arena relative mx-auto grid min-h-0 w-full max-w-[1400px] min-w-0 flex-1 gap-3 overflow-hidden px-3 pb-2 sm:px-5" style={{ gridTemplateColumns: cols }}>
       <div className={`flex min-h-0 min-w-0 flex-col ${settled ? 'opacity-80' : ''}`}>
         <CornerHeader corner="left" slots={p.slots} statuses={p.statuses} />
-        <Activity slots={CORNER_SLOTS.left} events={p.events} statuses={p.statuses} />
-        <Column items={byCorner.left} ctx={ctx} isOpen={isOpen} toggle={toggle} tint={tintL} />
+        <Column items={byCorner.left} ctx={ctx} isOpen={isOpen} toggle={toggle} tint={tintL} tail={<Presence slot="council_a" slots={p.slots} events={p.events} statuses={p.statuses} />} />
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-col">
@@ -209,19 +213,37 @@ export default function Arena(p: Props) {
           <span className="font-fight text-[22px] leading-none tracking-wide text-ink">The ring</span>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">{settled ? (openRisks ? `decided, ${openRisks} open` : 'decided') : 'referee and ringside'}</span>
         </div>
-        <Activity slots={CORNER_SLOTS.center} events={p.events} statuses={p.statuses} max={3} />
         {question && question.kind === 'question' && (
           <div className="mb-2 shrink-0">
             <QuestionCard item={question} />
           </div>
         )}
-        <Column items={byCorner.center} ctx={ctx} isOpen={isOpen} toggle={toggle} tint="color-mix(in srgb, var(--color-ink) 3%, var(--color-paper))" footer={verdict} />
+        <Column
+          items={byCorner.center}
+          ctx={ctx}
+          isOpen={isOpen}
+          toggle={toggle}
+          tint="color-mix(in srgb, var(--color-ink) 3%, var(--color-paper))"
+          tail={p.events.some(e => e.slot === 'checker') || p.statuses.some(s => s.slot === 'checker' && ACTIVE_STATES.has(s.state)) ? <Presence slot="checker" slots={p.slots} events={p.events} statuses={p.statuses} /> : null}
+          footer={verdict}
+        />
       </div>
 
       <div className={`flex min-h-0 min-w-0 flex-col ${settled ? 'opacity-80' : ''}`}>
         <CornerHeader corner="right" slots={p.slots} statuses={p.statuses} />
-        <Activity slots={CORNER_SLOTS.right} events={p.events} statuses={p.statuses} align="right" />
-        <Column items={byCorner.right} ctx={ctx} isOpen={isOpen} toggle={toggle} tint={tintR} />
+        <Column
+          items={byCorner.right}
+          ctx={ctx}
+          isOpen={isOpen}
+          toggle={toggle}
+          tint={tintR}
+          tail={
+            <div className="space-y-1.5">
+              <Presence slot="council_b" slots={p.slots} events={p.events} statuses={p.statuses} align="right" />
+              <Presence slot="council_c" slots={p.slots} events={p.events} statuses={p.statuses} align="right" />
+            </div>
+          }
+        />
       </div>
 
       {bannerNode}
