@@ -26,11 +26,10 @@ const ROUNDS = [
 
 // Real questions teams have put to the public room. Tap one and it is in the box.
 const EXAMPLES = [
-  'We run a small design studio with six people. A client wants a 40 percent discount for a 12-month retainer. Should we take it, counter, or walk away? Our utilisation is about 70 percent and we have two months of cash.',
-  'Our two-founder startup has 40 paying teams at 999 rupees a month. Should we raise a 2 crore angel round now at a 15 crore valuation, or bootstrap six more months and raise on better numbers? 14 months of runway either way.',
-  'Should our first hire be a full-stack engineer or a customer success person? We ship weekly, churn is about 6 percent a month, and support takes 2 hours a day of founder time.',
+  'A client wants a 40 percent discount in exchange for a 12-month retainer. We are a six-person design studio at 70 percent utilisation with two months of cash in the bank. Take it, counter, or walk away, and on what terms?',
+  'We have 40 paying teams at 999 rupees a month, 6 percent monthly churn and 14 months of runway. Raise a 2 crore angel round now at a 15 crore valuation, or bootstrap six more months and raise on better numbers?',
 ];
-const EXAMPLE_SHORT = ['Take the 40 percent discount?', 'Raise now or bootstrap?', 'Engineer or customer success first?'];
+const EXAMPLE_SHORT = ['Take the 40 percent discount?', 'Raise now or bootstrap six more months?'];
 
 const VERSUS: [string, string][] = [
   ['One model agrees with itself, and is wrong together.', 'Four models from four labs. They disagree in the places that matter.'],
