@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { reducers, tables } from '../module_bindings';
 import type { Question } from '../module_bindings/types';
-import { idHex, rememberName, rememberPendingEmail, savedName, takePendingEmail, toDate } from '../lib/stdb';
+import { idHex, rememberName, savedName, toDate } from '../lib/stdb';
+import { nameFromProfile } from '../lib/auth';
+import SignIn, { useOptionalAuth } from '../components/AuthBits';
 import Arena from '../components/Arena';
 import Composer from '../components/Composer';
 import RoundBar from '../components/RoundBar';
@@ -11,7 +13,7 @@ import { navigate } from '../App';
 export default function Room({ code }: { code: string }) {
   const { identity, isActive } = useSpacetimeDB();
   const joinRoom = useReducer(reducers.joinRoom);
-  const requestJoinEmail = useReducer(reducers.requestJoinEmail);
+  const auth = useOptionalAuth();
 
   const [rooms, roomsReady] = useTable(tables.room.where(r => r.code.eq(code)));
   const room = rooms[0];
@@ -44,20 +46,9 @@ export default function Room({ code }: { code: string }) {
 
   const me = idHex(identity);
   const myMember = members.find(m => idHex(m.identity) === me);
-  const [name, setName] = useState(savedName());
-  const [email, setEmail] = useState('');
+  const [name, setName] = useState(() => savedName() || nameFromProfile(auth?.user?.profile));
   const [joinError, setJoinError] = useState('');
   const triedAutoJoin = useRef(false);
-
-  // Once the person is in, send the room link to the email they typed at the door, if any.
-  const sentEmail = useRef(false);
-  useEffect(() => {
-    if (!room || !myMember || sentEmail.current) return;
-    const pending = takePendingEmail();
-    if (!pending) return;
-    sentEmail.current = true;
-    requestJoinEmail({ roomId: room.id, email: pending }).catch(() => {});
-  }, [room, myMember, requestJoinEmail]);
 
   useEffect(() => {
     if (!room || !identity || !isActive) return;
@@ -103,9 +94,7 @@ export default function Room({ code }: { code: string }) {
           onSubmit={async e => {
             e.preventDefault();
             if (!name.trim()) return;
-            if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setJoinError('That does not look like an email. Leave it empty or fix it.');
             rememberName(name.trim());
-            rememberPendingEmail(email.trim());
             try {
               await joinRoom({ code, name: name.trim() });
             } catch (err) {
@@ -116,14 +105,16 @@ export default function Room({ code }: { code: string }) {
         >
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Your name</label>
           <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="How the room should call you" className="w-full rounded-md border border-line bg-sheet px-3 py-3 text-lg outline-none focus:border-ink" maxLength={32} />
-          <label className="mb-1 mt-3 block text-xs font-semibold uppercase tracking-wider text-muted">Email, optional</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="We send you this room's link" className="w-full rounded-md border border-line bg-sheet px-3 py-2.5 outline-none focus:border-ink" maxLength={120} autoComplete="email" />
           <button type="submit" disabled={!isActive} className="mt-3 w-full rounded-md bg-ink px-4 py-3 font-semibold text-paper disabled:opacity-50">
             Step in
           </button>
           {joinError && <p className="mt-3 text-sm text-red">{joinError}</p>}
-          <p className="mt-6 text-sm text-muted">
-            No account, no password. Your name is remembered on this device; the email only gets the room link. {members.length} {members.length === 1 ? 'person is' : 'people are'} already here.
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted">
+            <span>No password. Your name is remembered on this device.</span>
+            <SignIn />
+          </div>
+          <p className="mt-3 text-sm text-muted">
+            {members.length} {members.length === 1 ? 'person is' : 'people are'} already here.
           </p>
         </form>
       </main>

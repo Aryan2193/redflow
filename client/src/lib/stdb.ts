@@ -51,13 +51,15 @@ function savedToken(): string | undefined {
   }
 }
 
-export function buildConnection() {
+// With a SpacetimeAuth ID token the person is the same identity on every device; without one the server issues an
+// anonymous identity that is remembered on this device only.
+export function buildConnection(authToken?: string) {
   let builder = DbConnection.builder()
     .withUri(STDB_URI)
     .withDatabaseName(STDB_DB)
     .onConnect((_conn, _identity, token) => {
       try {
-        localStorage.setItem(TOKEN_KEY, token);
+        if (!authToken) localStorage.setItem(TOKEN_KEY, token);
         sessionStorage.removeItem('redflow.reloaded');
       } catch {
         // fine
@@ -77,7 +79,7 @@ export function buildConnection() {
         }
       }
     });
-  const token = savedToken();
+  const token = authToken ?? savedToken();
   if (token) builder = builder.withToken(token);
   return builder;
 }

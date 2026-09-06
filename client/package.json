@@ -10,9 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "oidc-client-ts": "^3.5.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
+    "react-oidc-context": "^3.3.1",
     "remark-gfm": "^4.0.1",
     "spacetimedb": "^2.10.0"
   },
