@@ -8,13 +8,15 @@ type Props = {
   room: Room;
   question?: Question;
   queued: number;
+  // Asking a new question is opened from the header; the composer itself only steps in.
+  asking: boolean;
+  onAskingChange: (v: boolean) => void;
   onSent: () => void;
 };
 
 export default function Composer(p: Props) {
   const ask = useReducer(reducers.ask);
   const postNote = useReducer(reducers.postNote);
-  const wrapUp = useReducer(reducers.wrapUp);
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
   const [hint, setHint] = useState('');
@@ -24,14 +26,10 @@ export default function Composer(p: Props) {
 
   const q = p.question;
   const busy = !!q && q.state !== 'settled' && q.state !== 'failed';
-  const [mode, setMode] = useState<'ask' | 'note'>(!q || !busy ? 'ask' : 'note');
-  const modeKey = `${q?.id ?? 0}-${busy}`;
+  const asking = !q || p.asking;
   useEffect(() => {
-    setMode(!q || !busy ? 'ask' : 'note');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modeKey]);
-
-  const asking = mode === 'ask';
+    if (p.asking) taRef.current?.focus();
+  }, [p.asking]);
 
   async function send(e: React.SyntheticEvent) {
     e.preventDefault();
@@ -43,9 +41,10 @@ export default function Composer(p: Props) {
     try {
       if (asking) {
         await ask({ roomId: p.room.id, text: body });
+        p.onAskingChange(false);
       } else {
         await postNote({ roomId: p.room.id, text: body, teamQuestionId: 0n });
-        if (q && !busy) setHint('Saved. Press Go deeper on the decision to make the room use it, or switch to a new question.');
+        if (q && !busy) setHint('Saved. Press Go deeper on the decision to make the room use it, or ask a new question from the top right.');
       }
       setText('');
       p.onSent();
@@ -56,40 +55,13 @@ export default function Composer(p: Props) {
     }
   }
 
-  const pill = (active: boolean, extra = '') => `rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors ${active ? 'border-ink bg-ink text-paper' : 'border-line bg-sheet text-ink-2 hover:border-ink'} ${extra}`;
-
-  const placeholder = asking
-    ? q
-      ? 'Ask the room a new question.'
-      : 'Ask one question. A decision, a plan, a claim to stress-test.'
-    : busy
-      ? 'Step in. Add a fact, a constraint, or a correction. The models read it on their next turn.'
-      : 'Add a note for the next round.';
+  const placeholder = asking ? (q ? 'Ask the room a new question.' : 'Ask one question. A decision, a plan, a claim to stress-test.') : busy ? 'Step in. A fact, a constraint, a correction. The models read it on their next turn.' : 'Step in with a note for the next round.';
 
   return (
-    <form onSubmit={send} className="shrink-0 border-t border-line bg-paper px-3 pb-[max(env(safe-area-inset-bottom),10px)] pt-2 sm:px-4">
-      <div className="mx-auto max-w-[760px]">
-        <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-          {q && (
-            <button type="button" onClick={() => setMode('note')} className={pill(mode === 'note')}>
-              Step in
-            </button>
-          )}
-          <button type="button" onClick={() => setMode('ask')} disabled={busy} title={busy ? 'One question at a time. Wrap this one up first.' : ''} className={pill(mode === 'ask', 'disabled:cursor-not-allowed disabled:opacity-40')}>
-            {q ? 'New question' : 'Your question'}
-          </button>
-          {p.queued > 0 && (
-            <span>
-              {p.queued} note{p.queued === 1 ? '' : 's'} waiting for the next turn
-            </span>
-          )}
-          {busy && q && (
-            <button type="button" onClick={() => wrapUp({ questionId: q.id }).catch(e => setErr(String((e as Error)?.message ?? e)))} className="ml-auto underline">
-              Wrap it up now
-            </button>
-          )}
-        </div>
-        <div className="flex items-end gap-2 rounded-2xl border border-line bg-sheet px-3 py-2 focus-within:border-ink">
+    <form onSubmit={send} className="shrink-0 border-t border-line bg-paper px-4 pb-[max(env(safe-area-inset-bottom),10px)] pt-2.5 sm:px-8">
+      <div className="mx-auto max-w-[900px]">
+        <div className={`flex items-end gap-2 rounded-2xl border bg-sheet px-3 py-2 focus-within:border-ink ${asking && q ? 'border-red' : 'border-line'}`}>
+          {asking && q && <span className="mb-1.5 shrink-0 rounded-full bg-red-soft px-2 py-0.5 text-[11px] font-semibold text-red">New question</span>}
           <textarea
             ref={taRef}
             value={text}
@@ -99,19 +71,34 @@ export default function Composer(p: Props) {
                 e.preventDefault();
                 void send(e);
               }
+              if (e.key === 'Escape' && p.asking) p.onAskingChange(false);
             }}
             rows={1}
             placeholder={placeholder}
             className="flex-1 resize-none bg-transparent py-1 text-[15px] outline-none placeholder:text-muted"
             maxLength={2000}
-            aria-label="Message the room"
+            aria-label={asking ? 'Ask a new question' : 'Step in'}
           />
+          {asking && q && (
+            <button type="button" onClick={() => p.onAskingChange(false)} className="mb-1 shrink-0 text-xs text-muted underline">
+              Cancel
+            </button>
+          )}
           <button type="submit" disabled={sending || !text.trim()} className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-paper disabled:opacity-40 ${asking ? 'bg-red' : 'bg-ink'}`}>
-            {asking ? 'Ask' : 'Send'}
+            {asking ? 'Ask' : 'Step in'}
           </button>
         </div>
-        {err && <div className="mt-1.5 text-xs text-red">{err}</div>}
-        {hint && !err && <div className="mt-1.5 text-xs text-warn">{hint}</div>}
+        {(err || hint || p.queued > 0) && (
+          <div className="mt-1.5 flex gap-3 text-xs">
+            {err && <span className="text-red">{err}</span>}
+            {hint && !err && <span className="text-warn">{hint}</span>}
+            {p.queued > 0 && !err && (
+              <span className="text-muted">
+                {p.queued} note{p.queued === 1 ? '' : 's'} waiting for the next turn
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </form>
   );

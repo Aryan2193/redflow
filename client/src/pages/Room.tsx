@@ -77,6 +77,8 @@ export default function Room({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   const [explain, setExplain] = useState(false);
   const [layout, setLayout] = useState<Layout>(savedLayout);
+  const [asking, setAsking] = useState(false);
+  const wrapUp = useReducer(reducers.wrapUp);
   const pickLayout = (l: Layout) => {
     setLayout(l);
     try {
@@ -181,6 +183,15 @@ export default function Room({ code }: { code: string }) {
           <span className="hidden whitespace-nowrap text-xs text-muted sm:inline">
             {online.length} here{online.length !== members.length ? `, ${members.length} joined` : ''}
           </span>
+          {latest && latest.state !== 'settled' && latest.state !== 'failed' ? (
+            <button onClick={() => wrapUp({ questionId: latest.id }).catch(() => {})} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink-2 hover:border-ink" title="Stop the bout and decide with what stands">
+              Wrap it up
+            </button>
+          ) : (
+            <button onClick={() => setAsking(true)} className="shrink-0 whitespace-nowrap rounded-full bg-red px-2.5 py-0.5 text-xs font-semibold text-paper" title="Start a new question in this room">
+              New question
+            </button>
+          )}
           <span className="hidden shrink-0 items-center rounded-full border border-line bg-sheet p-0.5 text-[11px] font-semibold sm:inline-flex" role="tablist" aria-label="Layout">
             {(['control', 'arena'] as Layout[]).map(l => (
               <button key={l} role="tab" aria-selected={layout === l} onClick={() => pickLayout(l)} className={`rounded-full px-2 py-0.5 ${layout === l ? 'bg-ink text-paper' : 'text-ink-2'}`}>
@@ -277,7 +288,7 @@ export default function Room({ code }: { code: string }) {
         </div>
       )}
 
-      <Composer room={room} question={latest} queued={queued} onSent={() => setViewQid(null)} />
+      <Composer room={room} question={latest} queued={queued} asking={asking} onAskingChange={setAsking} onSent={() => setViewQid(null)} />
     </div>
   );
 }

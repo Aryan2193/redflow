@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentEvent, AgentStatus, AnswerVersion, Draft, Evidence, Member, ModelSlot, Note, Objection, Paragraph, Question, Room } from '../module_bindings/types';
-import { ACTIVE_STATES, ROUNDS, buildBout, roundIndex, safeUrl, unquote } from '../lib/bout';
-import { TONE_TEXT, speakerFor } from '../lib/labels';
+import { ACTIVE_STATES, ROUNDS, buildBout, hostOf, roundIndex, safeUrl, unquote } from '../lib/bout';
+import { TONE_BG, TONE_TEXT, speakerFor, type Speaker } from '../lib/labels';
 import { microStep } from '../lib/narrate';
 import { toDate } from '../lib/stdb';
 import ItemCard, { type CardCtx } from './Cards';
@@ -29,13 +29,38 @@ function clock(ms: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-// One line in the log: what happened, who did it, in which colour.
-type Line = { key: string; at: number; kind: string; who: string; tone: string; text: string; url?: string; live?: boolean };
-const KIND_CLS: Record<string, string> = { read: 'text-muted', search: 'text-teal', open: 'text-teal', write: 'text-ink', hit: 'text-red', stands: 'text-ok', refuted: 'text-red', ruling: 'text-ink', human: 'text-warn', now: 'text-red', v: 'text-ink' };
+function ago(at: number, now: number): string {
+  const s = Math.max(0, Math.round((now - at) / 1000));
+  if (s < 5) return 'now';
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m}m` : `${Math.round(m / 60)}h`;
+}
+
+// One agent action: what happened, by whom, in which colour.
+type Action = { key: string; at: number; kind: string; sp: Speaker; text: string; url?: string; live?: boolean };
+type Group = { sp: Speaker; actions: Action[] };
+
+const KIND_PILL: Record<string, string> = {
+  read: 'bg-judg-soft text-judg',
+  search: 'bg-teal-soft text-teal',
+  open: 'bg-teal-soft text-teal',
+  write: 'bg-judg-soft text-ink',
+  hit: 'bg-red-soft text-red',
+  heavy: 'bg-red text-paper',
+  stands: 'bg-ok-soft text-ok',
+  refuted: 'bg-red-soft text-red',
+  'no call': 'bg-warn-soft text-warn',
+  fixed: 'bg-ok-soft text-ok',
+  'still open': 'bg-red-soft text-red',
+  blocked: 'bg-judg-soft text-judg',
+  version: 'bg-ink text-paper',
+  now: 'bg-red-soft text-red',
+};
 
 function Band({ label, big, sub, live }: { label: string; big: ReactNode; sub: ReactNode; live?: boolean }) {
   return (
-    <div className="min-w-0 px-4 py-2.5 sm:border-r sm:border-line-2 sm:last:border-r-0">
+    <div className="min-w-0 py-2.5 pr-4 sm:border-r sm:border-line-2 sm:pl-4 sm:first:pl-0 sm:last:border-r-0">
       <div className="font-fight text-[11px] tracking-wider text-muted">{label}</div>
       <div className="mt-1 flex min-w-0 items-baseline gap-2">
         <span className="font-fight text-[28px] leading-none tabular-nums text-ink">{big}</span>
@@ -46,7 +71,7 @@ function Band({ label, big, sub, live }: { label: string; big: ReactNode; sub: R
   );
 }
 
-// A column that keeps its newest line in view until the reader scrolls away.
+// A column that keeps its newest entry in view until the reader scrolls away.
 function Follow({ children, sig, className = '' }: { children: ReactNode; sig: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -73,12 +98,28 @@ function Follow({ children, sig, className = '' }: { children: ReactNode; sig: s
   );
 }
 
+function Avatar({ sp, size = 'h-6 w-6 text-[11px]' }: { sp: Speaker; size?: string }) {
+  return (
+    <span className={`inline-flex ${size} shrink-0 items-center justify-center rounded-full font-bold text-paper ${TONE_BG[sp.tone]}`} aria-hidden>
+      {sp.name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+function PanelHead({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="mb-2 flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+      <span className="font-fight text-[17px] tracking-wide text-ink">{title}</span>
+      {children}
+    </div>
+  );
+}
+
 export default function ControlRoom(p: Props) {
   const q = p.question;
   const settled = q.state === 'settled' || q.state === 'failed';
   const leadName = p.slots.find(s => s.slot === 'council_a')?.label ?? 'The lead';
-  const label = (slot: string) => speakerFor(slot, p.slots).name;
-  const tone = (slot: string) => TONE_TEXT[speakerFor(slot, p.slots).tone];
+  const sp = (slot: string) => speakerFor(slot, p.slots);
 
   // Clock ticks every second while the bout runs.
   const [tick, setTick] = useState(Date.now());
@@ -101,25 +142,34 @@ export default function ControlRoom(p: Props) {
   const hits = p.objections.length;
   const conceded = p.objections.filter(o => o.status === 'withdrawn').length;
   const openRisks = p.objections.filter(o => o.status === 'unresolved').length;
+  const refereeSlot = p.slots.find(s => s.slot === 'referee' && s.enabled) ? 'referee' : 'council_b';
 
-  // The log: every real move, every human word, every stamp, one line each.
-  const lines: Line[] = useMemo(() => {
-    const out: Line[] = [];
+  // Every real move and every stamp, one action each, grouped by who did them in sequence.
+  const groups: Group[] = useMemo(() => {
     const at = (ts: { microsSinceUnixEpoch: bigint }) => toDate(ts).getTime();
-    for (const e of p.events) out.push({ key: 'e' + e.id, at: at(e.createdAt), kind: e.kind, who: label(e.slot), tone: tone(e.slot), text: e.detail, url: safeUrl(e.url) });
-    for (const n of p.notes) out.push({ key: 'n' + n.id, at: at(n.createdAt), kind: 'human', who: n.authorName, tone: 'text-ink', text: n.text });
-    for (const o of p.objections) out.push({ key: 'o' + o.id, at: at(o.createdAt), kind: 'hit', who: label(o.bySlot), tone: tone(o.bySlot), text: `${o.severity === 3 ? 'heavy hit' : 'hit'} on section ${o.targetOrdinal || '?'}: “${unquote(o.claim).slice(0, 80)}”` });
-    for (const e of p.evidence) out.push({ key: 'ev' + e.id, at: at(e.createdAt), kind: e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'read', who: label('checker'), tone: tone('checker'), text: `${e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'no call'}: “${unquote(e.claim).slice(0, 70)}”`, url: safeUrl(e.url) });
-    for (const v of p.versions) out.push({ key: 'v' + v.id, at: at(v.createdAt), kind: 'v', who: leadName, tone: tone('council_a'), text: v.version === 1 ? 'first answer is up, version 1' : `comeback, version ${v.version}` });
+    const out: Action[] = [];
+    for (const e of p.events) out.push({ key: 'e' + e.id, at: at(e.createdAt), kind: e.kind, sp: sp(e.slot), text: e.kind === 'open' ? hostOf(e.url || e.detail.replace(/^opened /, '')) : e.detail, url: safeUrl(e.url) });
+    for (const o of p.objections) out.push({ key: 'o' + o.id, at: at(o.createdAt), kind: o.severity === 3 ? 'heavy' : 'hit', sp: sp(o.bySlot), text: `section ${o.targetOrdinal || '?'}: “${unquote(o.claim)}”` });
+    for (const e of p.evidence) out.push({ key: 'ev' + e.id, at: at(e.createdAt), kind: e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'no call', sp: sp('checker'), text: `“${unquote(e.claim)}”`, url: safeUrl(e.url) });
+    for (const v of p.versions) out.push({ key: 'v' + v.id, at: at(v.createdAt), kind: 'version', sp: sp('council_a'), text: v.version === 1 ? 'first answer is up' : `comeback, version ${v.version}` });
     for (const o of p.objections) {
+      if (o.status === 'overruled' && o.resolution.startsWith('Overruled by the lead')) out.push({ key: 'b' + o.id, at: at(o.updatedAt), kind: 'blocked', sp: sp('council_a'), text: `${sp(o.bySlot).name} on section ${o.targetOrdinal || '?'}` });
       const tail = o.resolution.split(' | ').pop() ?? '';
-      if (/^(withdrawn|held):/.test(tail)) out.push({ key: 'r' + o.id, at: at(o.updatedAt), kind: 'ruling', who: label(p.slots.find(s => s.slot === 'referee' && s.enabled) ? 'referee' : 'council_b'), tone: tone(p.slots.find(s => s.slot === 'referee' && s.enabled) ? 'referee' : 'council_b'), text: `${/^withdrawn/.test(tail) ? 'fixed' : 'still open'}: ${label(o.bySlot)} on section ${o.targetOrdinal || '?'}` });
+      if (/^(withdrawn|held):/.test(tail)) out.push({ key: 'r' + o.id, at: at(o.updatedAt), kind: /^withdrawn/.test(tail) ? 'fixed' : 'still open', sp: sp(refereeSlot), text: `${sp(o.bySlot).name} on section ${o.targetOrdinal || '?'}` });
     }
     out.sort((a, b) => a.at - b.at);
-    for (const s of working) out.push({ key: 'now' + s.slot, at: Number.MAX_SAFE_INTEGER, kind: 'now', who: label(s.slot), tone: tone(s.slot), text: microStep(s.state, s.slot, tick - toDate(s.updatedAt).getTime()), live: true });
-    return out;
+    for (const s of working) out.push({ key: 'now' + s.slot, at: Number.MAX_SAFE_INTEGER, kind: 'now', sp: sp(s.slot), text: microStep(s.state, s.slot, tick - toDate(s.updatedAt).getTime()), live: true });
+    const gs: Group[] = [];
+    for (const a of out) {
+      const last = gs[gs.length - 1];
+      if (last && last.sp.key === a.sp.key && !a.live && !last.actions[last.actions.length - 1].live) last.actions.push(a);
+      else gs.push({ sp: a.sp, actions: [a] });
+    }
+    return gs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.events, p.notes, p.objections, p.evidence, p.versions, working, tick, p.slots]);
+  }, [p.events, p.objections, p.evidence, p.versions, working, tick, p.slots]);
+  const totalActions = groups.reduce((n, g) => n + g.actions.filter(a => !a.live).length, 0);
+  const perAgent = agents.map(a => ({ sp: sp(a.slot), n: groups.reduce((n, g) => n + (g.sp.key === a.slot || (a.slot === 'council_b' && g.sp.key === 'checker') ? g.actions.filter(x => !x.live).length : 0), 0) }));
 
   // The spotlight: the one card that matters right now.
   const real = items.filter(i => i.kind !== 'question' && i.kind !== 'note' && i.kind !== 'typing');
@@ -131,59 +181,71 @@ export default function ControlRoom(p: Props) {
   const humanNotes = p.notes.slice().sort((a, b) => Number(a.id - b.id));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="mx-auto flex w-full max-w-[1480px] min-h-0 flex-1 flex-col px-4 sm:px-8">
       <div className="grid grid-cols-2 border-b border-line sm:grid-cols-4">
-        <Band label="Agents live" big={agents.length} live={working.length > 0} sub={working.length ? `${working.map(s => label(s.slot)).join(', ')} working` : settled ? 'all done' : 'waiting'} />
+        <Band label="Agents live" big={agents.length} live={working.length > 0} sub={working.length ? `${working.map(s => sp(s.slot).name).join(', ')} working` : settled ? 'all done' : 'waiting'} />
         <Band label="Humans live" big={humans.length} sub={humans.map(m => m.name).join(', ') || 'nobody yet'} />
         <Band label="Round" big={settled ? (q.state === 'failed' ? 'stop' : 'done') : idx + 1} sub={settled ? (openRisks ? `decided, ${openRisks} open` : 'decided') : `${ROUNDS[Math.min(idx, 4)].label} · ${hits} hits, ${conceded} conceded`} />
         <Band label="Clock" big={clock(elapsed)} live={!settled} sub={settled ? 'settled' : idx >= 3 ? 'decides soon' : 'in progress'} />
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 md:grid-cols-[300px_minmax(0,1fr)_300px]">
-        <section className="flex min-h-0 flex-col border-b border-line px-3 py-2.5 md:border-b-0 md:border-r">
-          <div className="mb-1.5 flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
-            <span className="font-fight text-[16px] tracking-wide text-ink">Log</span>
-            <span>{lines.filter(l => !l.live).length} moves</span>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-x-6 md:grid-cols-[minmax(340px,1.05fr)_minmax(0,1.45fr)_minmax(260px,0.8fr)]">
+        <section className="flex min-h-0 flex-col py-3">
+          <PanelHead title="Agent actions">
+            <span>{totalActions} so far</span>
+          </PanelHead>
+          <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-[11.5px] text-muted">
+            {perAgent.map(a => (
+              <span key={a.sp.key} className="inline-flex items-center gap-1">
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${TONE_BG[a.sp.tone]}`} aria-hidden />
+                <span className={`font-semibold ${TONE_TEXT[a.sp.tone]}`}>{a.sp.name}</span> {a.n}
+              </span>
+            ))}
           </div>
-          <Follow sig={lines.map(l => l.key).join('|')} className="max-h-[36vh] md:max-h-none">
-            <ol className="space-y-1 text-[12.5px] leading-[1.45]">
-              {lines.map(l => (
-                <li key={l.key} className={`flex items-baseline gap-1.5 ${l.at !== Number.MAX_SAFE_INTEGER && p.now - l.at < 3000 ? 'enter-c' : ''}`}>
-                  <span className={`shrink-0 font-mono text-[10px] uppercase tracking-wider ${KIND_CLS[l.kind] ?? 'text-muted'}`}>
-                    {l.live && <span className="pulse mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red align-middle" aria-hidden />}
-                    {l.kind === 'v' ? 'write' : l.kind}
-                  </span>
-                  <span className={`shrink-0 font-semibold ${l.tone}`}>{l.who}</span>
-                  {l.url ? (
-                    <a href={l.url} target="_blank" rel="noreferrer" className="min-w-0 truncate text-ink-2 underline decoration-line">
-                      {l.text}
-                    </a>
-                  ) : (
-                    <span className={`min-w-0 truncate ${l.live ? 'text-ink' : 'text-ink-2'}`}>{l.text}</span>
-                  )}
+          <Follow sig={groups.map(g => g.actions[g.actions.length - 1].key).join('|')} className="max-h-[38vh] pr-1 md:max-h-none">
+            <ol className="space-y-3">
+              {groups.map((g, gi) => (
+                <li key={g.actions[0].key + gi} className={p.now - g.actions[0].at < 3000 ? 'enter-c' : ''}>
+                  <div className="flex items-center gap-2">
+                    <Avatar sp={g.sp} />
+                    <span className={`text-[13px] font-semibold ${TONE_TEXT[g.sp.tone]}`}>{g.sp.name}</span>
+                    {g.sp.role && <span className="text-[11px] text-muted">{g.sp.role}</span>}
+                    <span className="ml-auto text-[11px] text-muted">{g.actions[0].live ? '' : ago(g.actions[g.actions.length - 1].at, p.now)}</span>
+                  </div>
+                  <ol className="ml-[11px] mt-1 space-y-1 border-l border-line pl-4">
+                    {g.actions.map(a => (
+                      <li key={a.key} className="flex items-baseline gap-2 text-[13px] leading-snug">
+                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-px font-mono text-[10px] uppercase tracking-wider ${KIND_PILL[a.kind] ?? 'bg-judg-soft text-judg'}`}>
+                          {a.live && <span className="pulse inline-block h-1.5 w-1.5 rounded-full bg-red" aria-hidden />}
+                          {a.kind}
+                        </span>
+                        {a.url ? (
+                          <a href={a.url} target="_blank" rel="noreferrer" className="min-w-0 truncate text-ink-2 underline decoration-line">
+                            {a.text}
+                          </a>
+                        ) : (
+                          <span className={`min-w-0 truncate ${a.live ? 'text-ink' : 'text-ink-2'}`}>{a.text}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
                 </li>
               ))}
+              {groups.length === 0 && <li className="text-[13px] text-muted">The first moves land here within seconds.</li>}
             </ol>
           </Follow>
         </section>
 
-        <section className="flex min-h-0 flex-col px-3 py-2.5 sm:px-5">
-          <div className="mb-1.5 flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
-            <span className="font-fight text-[16px] tracking-wide text-ink">Spotlight</span>
+        <section className="flex min-h-0 flex-col py-3">
+          <PanelHead title="Spotlight">
             <span>{settled ? 'the decision' : 'what matters right now'}</span>
             {pinned && (
               <button type="button" onClick={() => setPinned(null)} className="ml-auto underline">
                 Back to live
               </button>
             )}
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mb-3 rounded-xl border border-ink/60 bg-sheet px-3.5 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                The question <span className="normal-case tracking-normal text-ink-2">asked by {q.askedByName}</span>
-              </div>
-              <div className="mt-0.5 text-[14.5px] font-medium leading-snug">{q.text}</div>
-            </div>
+          </PanelHead>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             {settled && !pinned ? (
               <div className="verdict-in">
                 <Verdict room={p.room} question={q} paragraphs={p.paragraphs} objections={p.objections} evidence={p.evidence} notes={p.notes} slots={p.slots} now={p.now} myName={p.myName} />
@@ -193,10 +255,10 @@ export default function ControlRoom(p: Props) {
                 <ItemCard item={shown} ctx={ctx} expanded onToggle={() => {}} />
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted">{leadName} is writing the first answer. The first card lands here.</div>
+              <div className="rounded-xl border border-dashed border-line px-4 py-10 text-center text-sm text-muted">{leadName} is writing the first answer. The first card lands here.</div>
             )}
             {recent.length > 0 && (
-              <div className="mt-3">
+              <div className="mt-4">
                 <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">Just before</div>
                 <div className="space-y-1.5">
                   {recent.map(it => (
@@ -208,27 +270,37 @@ export default function ControlRoom(p: Props) {
           </div>
         </section>
 
-        <section className="flex min-h-0 flex-col border-t border-line px-3 py-2.5 md:border-l md:border-t-0" style={{ background: 'color-mix(in srgb, var(--color-ink) 3%, var(--color-paper))' }}>
-          <div className="mb-1.5 flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
-            <span className="font-fight text-[16px] tracking-wide text-ink">Ringside</span>
-            <span>{humans.length} here, everything humans say</span>
-          </div>
-          <Follow sig={humanNotes.map(n => n.id.toString()).join('|')} className="max-h-[36vh] md:max-h-none">
-            {humanNotes.length === 0 && <p className="text-[13px] text-muted">Nothing said yet. Whatever anyone in the room types lands here, and the models read it on their next turn.</p>}
-            <ol className="space-y-2.5">
+        <section className="flex min-h-0 flex-col py-3">
+          <PanelHead title="Ringside">
+            <span>{humans.length} here</span>
+          </PanelHead>
+          <Follow sig={humanNotes.map(n => n.id.toString()).join('|')} className="max-h-[38vh] pr-1 md:max-h-none">
+            <ol className="space-y-3">
+              <li className="flex gap-2">
+                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-paper" aria-hidden>
+                  {q.askedByName.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-semibold">
+                    {q.askedByName} <span className="font-normal text-muted">asked</span>
+                  </div>
+                  <div className="rounded-xl border border-ink/70 bg-sheet px-3 py-2 text-[14px] font-medium leading-snug">{q.text}</div>
+                </div>
+              </li>
               {humanNotes.map(n => (
                 <li key={n.id.toString()} className={`flex gap-2 ${p.now - toDate(n.createdAt).getTime() < 3000 ? 'enter-c' : ''}`}>
                   <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-paper" aria-hidden>
                     {n.authorName.charAt(0).toUpperCase()}
                   </span>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="text-[12px] font-semibold">
                       {n.authorName} <span className="font-normal text-muted">{n.consumedStep === '' && !settled ? '· read on the next turn' : ''}</span>
                     </div>
-                    <div className="rounded-xl border border-line bg-sheet px-2.5 py-1.5 text-[13.5px] leading-relaxed">{n.text}</div>
+                    <div className="rounded-xl border border-line bg-sheet px-3 py-2 text-[13.5px] leading-relaxed">{n.text}</div>
                   </div>
                 </li>
               ))}
+              {humanNotes.length === 0 && <li className="text-[12.5px] text-muted">Whatever anyone here types lands under the question, and the models read it on their next turn.</li>}
             </ol>
           </Follow>
         </section>
