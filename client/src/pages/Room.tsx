@@ -6,7 +6,22 @@ import { idHex, rememberName, savedName, toDate } from '../lib/stdb';
 import { nameFromProfile } from '../lib/auth';
 import SignIn, { useOptionalAuth } from '../components/AuthBits';
 import Arena from '../components/Arena';
+import ControlRoom from '../components/ControlRoom';
 import Composer from '../components/Composer';
+
+// Two layouts share every component underneath. The default comes from the build; the switch in the header
+// overrides it on this device.
+type Layout = 'arena' | 'control';
+const LAYOUT_KEY = 'redflow.layout';
+const DEFAULT_LAYOUT: Layout = ((import.meta.env.VITE_ROOM_LAYOUT as string | undefined) ?? 'control') === 'arena' ? 'arena' : 'control';
+function savedLayout(): Layout {
+  try {
+    const v = localStorage.getItem(LAYOUT_KEY);
+    return v === 'arena' || v === 'control' ? v : DEFAULT_LAYOUT;
+  } catch {
+    return DEFAULT_LAYOUT;
+  }
+}
 import RoundBar from '../components/RoundBar';
 import { navigate } from '../App';
 
@@ -61,6 +76,15 @@ export default function Room({ code }: { code: string }) {
 
   const [copied, setCopied] = useState(false);
   const [explain, setExplain] = useState(false);
+  const [layout, setLayout] = useState<Layout>(savedLayout);
+  const pickLayout = (l: Layout) => {
+    setLayout(l);
+    try {
+      localStorage.setItem(LAYOUT_KEY, l);
+    } catch {
+      // fine
+    }
+  };
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 5000);
@@ -157,6 +181,13 @@ export default function Room({ code }: { code: string }) {
           <span className="hidden whitespace-nowrap text-xs text-muted sm:inline">
             {online.length} here{online.length !== members.length ? `, ${members.length} joined` : ''}
           </span>
+          <span className="hidden shrink-0 items-center rounded-full border border-line bg-sheet p-0.5 text-[11px] font-semibold sm:inline-flex" role="tablist" aria-label="Layout">
+            {(['control', 'arena'] as Layout[]).map(l => (
+              <button key={l} role="tab" aria-selected={layout === l} onClick={() => pickLayout(l)} className={`rounded-full px-2 py-0.5 ${layout === l ? 'bg-ink text-paper' : 'text-ink-2'}`}>
+                {l === 'control' ? 'Control room' : 'Arena'}
+              </button>
+            ))}
+          </span>
           <button onClick={() => setExplain(v => !v)} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-xs text-ink-2" aria-label="How this works">
             {explain ? 'Close' : <><span className="sm:hidden">How</span><span className="hidden sm:inline">How this works</span></>}
           </button>
@@ -189,7 +220,7 @@ export default function Room({ code }: { code: string }) {
             </div>
           </div>
         )}
-        {question && (
+        {question && layout === 'arena' && (
           <div className="border-t border-line-2 py-1.5">
             <RoundBar question={question} openRisks={openRisks} />
           </div>
@@ -203,21 +234,40 @@ export default function Room({ code }: { code: string }) {
       )}
 
       {question ? (
-        <Arena
-          room={room}
-          question={question}
-          notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
-          drafts={drafts}
-          objections={objections}
-          evidence={evidence}
-          paragraphs={paragraphs}
-          versions={versions}
-          statuses={statuses}
-          events={events}
-          slots={slots}
-          now={now}
-          myName={myMember.name}
-        />
+        layout === 'control' ? (
+          <ControlRoom
+            room={room}
+            question={question}
+            members={members}
+            notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
+            drafts={drafts}
+            objections={objections}
+            evidence={evidence}
+            paragraphs={paragraphs}
+            versions={versions}
+            statuses={statuses}
+            events={events}
+            slots={slots}
+            now={now}
+            myName={myMember.name}
+          />
+        ) : (
+          <Arena
+            room={room}
+            question={question}
+            notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
+            drafts={drafts}
+            objections={objections}
+            evidence={evidence}
+            paragraphs={paragraphs}
+            versions={versions}
+            statuses={statuses}
+            events={events}
+            slots={slots}
+            now={now}
+            myName={myMember.name}
+          />
+        )
       ) : (
         <div className="flex flex-1 items-center justify-center px-5 text-center">
           <div className="max-w-md">

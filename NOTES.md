@@ -138,3 +138,7 @@
 - Gap filled: Perplexity was critic, fact checker and verifier at once, so it ruled on fixes to its own hits. New slot `referee` = google/gemini-3.8-flash (fourth lab, reasoning low, prompt JSON with json_object) rules on every addressed objection. Fallback chain if the referee is missing or disabled: council_b, then council_c. Registered on local and Maincloud with set_model_slot; the seed list carries it for fresh databases.
 - Client: amber tone, ring header "Gemini referees", referee presence block in the ring, ruling cards attributed to the referee, verdict line "Gemini refereed."
 - Real clock check: it was 06:04 IST when this started, not the 07:55 I had been estimating. Freeze 08:30 stands.
+
+## 06:35 (Sun) layout switch: Control room (default) and Arena
+- Aryan picked sample C. components/ControlRoom.tsx: status band (agents live, humans live, round with hits and concessions, clock), Log (every move, human word and stamp as one coloured line, with a live "now" line per working agent), Spotlight (the newest card open, "Just before" folded rows, click one to pin it, the decision when settled), Ringside (everything humans typed). Arena.tsx untouched.
+- Default layout from client/.env.production `VITE_ROOM_LAYOUT=control`; a Control room / Arena switch in the room header overrides it per device (localStorage redflow.layout). Revert to the arena for everyone: set VITE_ROOM_LAYOUT=arena, rebuild, redeploy.
