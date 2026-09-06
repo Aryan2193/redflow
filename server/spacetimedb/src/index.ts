@@ -1222,10 +1222,13 @@ function stepDraft(ctx: any, load: any, arg: any) {
   const timeSensitive =
     isLead &&
     /(price|pricing|cost|fee|₹|\$|rupee|dollar|usd|inr|version|latest|current|today|\bnow\b|this (year|month|week|quarter)|20(2[4-9])|law|regulat|tax|gst|rate|plan|tier|api|model|release|launch|market|salary|hiring|compet)/i.test(q.text);
+  // Web search plus thinking can push the lead past the request timeout. Search on the first try only; a retry
+  // writes from knowledge so the room always gets the lead's own answer.
+  const useWeb = timeSensitive && arg.attempt === 0;
   ctx.withTx((tx: Tx) => {
     setAgentStatus(tx.db, tx.timestamp, q.id, arg.slot, 'drafting', isLead ? 'writing the first full answer' : 'writing an alternative, blind');
     logEvent(tx.db, tx.timestamp, q.id, arg.slot, 'read', isLead ? `read the question${notes.length ? ` and ${notes.length} team note${notes.length === 1 ? '' : 's'}` : ''}` : 'read the question, drafting blind');
-    if (timeSensitive) logEvent(tx.db, tx.timestamp, q.id, arg.slot, 'search', 'searching the web for current facts before writing');
+    if (useWeb) logEvent(tx.db, tx.timestamp, q.id, arg.slot, 'search', 'searching the web for current facts before writing');
   });
   const schema = {
     type: 'object',
@@ -1268,8 +1271,8 @@ assumptions: up to five sentences, each a specific thing you took as true that t
     user,
     schema,
     2200,
-    timeSensitive ? 4 : 0,
-    isLead ? 80_000 : 70_000
+    useWeb ? 3 : 0,
+    isLead ? (useWeb ? 115_000 : 85_000) : 70_000
   );
   ctx.withTx((tx: Tx) => {
     noteCall(tx, q.id, q.roomId);
@@ -1796,7 +1799,7 @@ summary: one sentence for the team, in the voice of someone defending their work
     schema,
     3000,
     0,
-    100_000
+    125_000
   );
   ctx.withTx((tx: Tx) => {
     noteCall(tx, q.id, q.roomId);
