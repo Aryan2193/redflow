@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AgentEvent, AgentStatus, ModelSlot } from '../module_bindings/types';
-import { ACTIVE_STATES } from '../lib/bout';
+import { ACTIVE_STATES, safeUrl } from '../lib/bout';
 import { TONE_BG, TONE_TEXT, speakerFor } from '../lib/labels';
 import { microStep } from '../lib/narrate';
 import { toDate } from '../lib/stdb';
@@ -30,7 +30,7 @@ export default function Presence({ slot, slots, events, statuses, align = 'left'
 
   const real: Line[] = events
     .filter(e => mine(e.slot))
-    .map(e => ({ key: 'e' + e.id, kind: e.kind, text: e.detail, url: e.url || undefined, at: toDate(e.createdAt).getTime() }))
+    .map(e => ({ key: 'e' + e.id, kind: e.kind, text: e.detail, url: safeUrl(e.url), at: toDate(e.createdAt).getTime() }))
     .sort((a, b) => b.at - a.at);
   const shown = real.slice(0, max);
   const right = align === 'right';

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AgentEvent, AgentStatus, AnswerVersion, Draft, Evidence, Member, ModelSlot, Note, Objection, Paragraph, Question, Room } from '../module_bindings/types';
-import { ACTIVE_STATES, ROUNDS, buildBout, roundIndex, unquote } from '../lib/bout';
+import { ACTIVE_STATES, ROUNDS, buildBout, roundIndex, safeUrl, unquote } from '../lib/bout';
 import { TONE_TEXT, speakerFor } from '../lib/labels';
 import { microStep } from '../lib/narrate';
 import { toDate } from '../lib/stdb';
@@ -106,10 +106,10 @@ export default function ControlRoom(p: Props) {
   const lines: Line[] = useMemo(() => {
     const out: Line[] = [];
     const at = (ts: { microsSinceUnixEpoch: bigint }) => toDate(ts).getTime();
-    for (const e of p.events) out.push({ key: 'e' + e.id, at: at(e.createdAt), kind: e.kind, who: label(e.slot), tone: tone(e.slot), text: e.detail, url: e.url || undefined });
+    for (const e of p.events) out.push({ key: 'e' + e.id, at: at(e.createdAt), kind: e.kind, who: label(e.slot), tone: tone(e.slot), text: e.detail, url: safeUrl(e.url) });
     for (const n of p.notes) out.push({ key: 'n' + n.id, at: at(n.createdAt), kind: 'human', who: n.authorName, tone: 'text-ink', text: n.text });
     for (const o of p.objections) out.push({ key: 'o' + o.id, at: at(o.createdAt), kind: 'hit', who: label(o.bySlot), tone: tone(o.bySlot), text: `${o.severity === 3 ? 'heavy hit' : 'hit'} on section ${o.targetOrdinal || '?'}: “${unquote(o.claim).slice(0, 80)}”` });
-    for (const e of p.evidence) out.push({ key: 'ev' + e.id, at: at(e.createdAt), kind: e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'read', who: label('checker'), tone: tone('checker'), text: `${e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'no call'}: “${unquote(e.claim).slice(0, 70)}”`, url: e.url || undefined });
+    for (const e of p.evidence) out.push({ key: 'ev' + e.id, at: at(e.createdAt), kind: e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'read', who: label('checker'), tone: tone('checker'), text: `${e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'no call'}: “${unquote(e.claim).slice(0, 70)}”`, url: safeUrl(e.url) });
     for (const v of p.versions) out.push({ key: 'v' + v.id, at: at(v.createdAt), kind: 'v', who: leadName, tone: tone('council_a'), text: v.version === 1 ? 'first answer is up, version 1' : `comeback, version ${v.version}` });
     for (const o of p.objections) {
       const tail = o.resolution.split(' | ').pop() ?? '';

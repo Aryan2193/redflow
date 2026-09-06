@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import type { Draft, Evidence, ModelSlot, Note, Objection, Paragraph } from '../module_bindings/types';
 import { changedShare, wordDiff } from '../lib/diff';
 import { TONE_BG, TONE_BUB, TONE_TEXT, evidenceState, objectionState, type Speaker } from '../lib/labels';
-import { causeOf, cleanHeading, cleanWhy, hostOf, splitSections, unquote, type BoutItem } from '../lib/bout';
+import { causeOf, cleanHeading, cleanWhy, hostOf, safeUrl, splitSections, unquote, type BoutItem } from '../lib/bout';
 import { useLive, useReveal } from '../lib/reveal';
 import Stamp, { type StampTone } from './Stamp';
 
@@ -308,8 +308,8 @@ function EvidenceBody({ e, live }: { e: Evidence; live: boolean }) {
     <div>
       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>Checked on the web</span>
-        {e.url && (
-          <a href={e.url} target="_blank" rel="noreferrer" className="font-semibold text-ink-2 underline decoration-line">
+        {safeUrl(e.url) && (
+          <a href={safeUrl(e.url)} target="_blank" rel="noreferrer" className="font-semibold text-ink-2 underline decoration-line">
             {hostOf(e.url)}
           </a>
         )}

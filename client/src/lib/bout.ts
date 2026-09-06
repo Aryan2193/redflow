@@ -77,6 +77,17 @@ export function cleanWhy(why: string): string {
     .trim();
 }
 
+// URLs arrive from model output and web annotations. Only http and https may become links.
+export function safeUrl(u?: string): string | undefined {
+  if (!u) return undefined;
+  try {
+    const parsed = new URL(u, window.location.origin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
