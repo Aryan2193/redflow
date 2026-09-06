@@ -191,6 +191,8 @@ export const Question = __t.object("Question", {
   callsUsed: __t.u32(),
   openObjections: __t.u32(),
   lastError: __t.string(),
+  extraPasses: __t.u8(),
+  contextSeen: __t.u32(),
 });
 export type Question = __Infer<typeof Question>;
 

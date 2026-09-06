@@ -27,4 +27,6 @@ export default __t.row({
   callsUsed: __t.u32().name("calls_used"),
   openObjections: __t.u32().name("open_objections"),
   lastError: __t.string().name("last_error"),
+  extraPasses: __t.u8().name("extra_passes"),
+  contextSeen: __t.u32().name("context_seen"),
 });

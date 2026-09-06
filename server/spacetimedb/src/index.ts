@@ -127,6 +127,10 @@ const question = table(
     callsUsed: t.u32(),
     openObjections: t.u32(),
     lastError: t.string(),
+    // Extra revision passes taken so that human input never goes unread before a decision.
+    extraPasses: t.u8().default(0),
+    // Length of the room context the lead last read, to notice context added since.
+    contextSeen: t.u32().default(0),
   }
 );
 
@@ -624,6 +628,8 @@ function startQuestion(ctx: Ctx, roomId: bigint, askerName: string, body: string
     roomId,
     askedBy: ctx.sender,
     askedByName: askerName,
+    extraPasses: 0,
+    contextSeen: r.brief.length,
     text: body,
     state: 'drafting',
     round: 1,
@@ -1317,7 +1323,7 @@ assumptions: up to five sentences, each a specific thing you took as true that t
         summary: `${slotRow.label} answered alone. Two other models are now drafting their own view before they attack this one.`,
         createdAt: tx.timestamp,
       });
-      tx.db.question.id.update({ ...qq, version: 1, updatedAt: tx.timestamp });
+      tx.db.question.id.update({ ...qq, version: 1, contextSeen: (r?.brief ?? '').length, updatedAt: tx.timestamp });
       // Version one is on screen. Now the critics write their own view, blind, before they attack it.
       scheduleCriticDrafts(tx, q.id, qq.round, load.slots);
     }
@@ -1389,6 +1395,20 @@ function afterFanInCheck(tx: Tx, questionId: bigint, step: string, slots: any[])
 function settleFromVerify(tx: Tx, questionId: bigint, slots: any[]) {
   const q = tx.db.question.id.find(questionId);
   if (!q) return;
+  // Never decide over the team's head. If a note arrived after the lead last read the room, or the room context
+  // changed, the lead takes one more revision pass first. Capped so a stream of notes cannot run forever.
+  const cfg = tx.db.config.id.find(0)!;
+  const r = tx.db.room.id.find(q.roomId);
+  const unread = [...tx.db.note.questionId.filter(q.id)].filter(n => n.consumedStep === '' && n.teamQuestionId === 0n);
+  const contextChanged = !!r && r.brief.length !== q.contextSeen;
+  if ((unread.length || contextChanged) && !q.wrapRequested && q.extraPasses < 2 && q.callsUsed + 2 <= cfg.maxCallsPerQuestion) {
+    const why = unread.length ? `${unread.length} note${unread.length === 1 ? '' : 's'} from the team arrived after the last revision` : 'the room context changed';
+    tx.db.question.id.update({ ...q, state: 'synthesizing', extraPasses: q.extraPasses + 1, updatedAt: tx.timestamp });
+    setAgentStatus(tx.db, tx.timestamp, q.id, LEAD, 'synthesizing', 'reading what the team just added before deciding');
+    logEvent(tx.db, tx.timestamp, q.id, 'chair', 'read', `${why}, one more pass before deciding`);
+    scheduleStep(tx.db, tx.timestamp, q.id, q.round, 'synthesize', 'chair');
+    return;
+  }
   const open = openObjections(tx.db, q.id);
   if (open.length === 0) {
     settle(tx, q.id, 'ledger empty');
@@ -1863,7 +1883,7 @@ summary: one sentence for the team, in the voice of someone defending their work
     }
     tx.db.answer_version.insert({ id: 0n, questionId: q.id, version, round: qq.round, summary: summary + (refused ? ` (${refused} uncaused edit${refused === 1 ? '' : 's'} refused)` : ''), createdAt: tx.timestamp });
     const addressedRows = [...tx.db.objection.questionId.filter(q.id)].filter(o => o.status === 'addressed');
-    tx.db.question.id.update({ ...qq, version, state: 'verifying', openObjections: stillOpen.length, updatedAt: tx.timestamp });
+    tx.db.question.id.update({ ...qq, version, state: 'verifying', openObjections: stillOpen.length, contextSeen: (r?.brief ?? '').length, updatedAt: tx.timestamp });
     setAgentStatus(tx.db, tx.timestamp, q.id, LEAD, 'done', `version ${version}: ${applied} edit${applied === 1 ? '' : 's'}${refused ? `, ${refused} refused` : ''}`);
     if (addressedRows.length === 0) {
       settleFromVerify(tx, q.id, load.slots);
