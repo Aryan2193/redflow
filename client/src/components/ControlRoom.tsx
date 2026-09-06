@@ -3,7 +3,10 @@ import type { AgentEvent, AgentStatus, AnswerVersion, Draft, Evidence, Member, M
 import { ACTIVE_STATES, ROUNDS, buildBout, hostOf, roundIndex, safeUrl, unquote } from '../lib/bout';
 import { TONE_BG, TONE_TEXT, speakerFor, type Speaker } from '../lib/labels';
 import { microStep } from '../lib/narrate';
+import { useMediaQuery } from '../lib/reveal';
 import { toDate } from '../lib/stdb';
+
+type Tab = 'spotlight' | 'actions' | 'chat';
 import ItemCard, { type CardCtx } from './Cards';
 import Verdict from './Verdict';
 
@@ -118,6 +121,12 @@ export default function ControlRoom(p: Props) {
   const settled = q.state === 'settled' || q.state === 'failed';
   const leadName = p.slots.find(s => s.slot === 'council_a')?.label ?? 'The lead';
   const sp = (slot: string) => speakerFor(slot, p.slots);
+  const wide = useMediaQuery('(min-width: 768px)');
+  const [tab, setTab] = useState<Tab>('spotlight');
+  // When the decision lands, a phone shows it.
+  useEffect(() => {
+    if (settled) setTab('spotlight');
+  }, [settled]);
 
   // Narrated micro-steps rotate while agents work.
   const [tick, setTick] = useState(Date.now());
@@ -168,9 +177,8 @@ export default function ControlRoom(p: Props) {
   const humanNotes = p.notes.slice().sort((a, b) => Number(a.id - b.id));
   const roundLabel = settled ? (q.state === 'failed' ? 'stopped' : openRisks ? `decided, ${openRisks} open` : 'decided') : `round ${idx + 1} · ${ROUNDS[Math.min(idx, 4)].label}`;
 
-  return (
-    <div className="mx-auto grid w-full max-w-[1480px] min-h-0 flex-1 grid-cols-1 gap-x-6 px-4 sm:px-8 md:grid-cols-[minmax(340px,1.05fr)_minmax(0,1.45fr)_minmax(260px,0.8fr)]">
-      <section className="flex min-h-0 flex-col py-3">
+  const actionsPanel = (
+      <section className="flex min-h-0 flex-1 flex-col py-3">
         <PanelHead title="Agent actions">
           <span>
             {agents.length} agents{working.length ? `, ${working.length} working` : ''} · {total} so far
@@ -204,8 +212,10 @@ export default function ControlRoom(p: Props) {
           </ol>
         </div>
       </section>
+  );
 
-      <section className="flex min-h-0 flex-col py-3">
+  const spotlightPanel = (
+      <section className="flex min-h-0 flex-1 flex-col py-3">
         <PanelHead title="Spotlight">
           <span className={settled ? 'text-ok' : 'text-ink'}>{roundLabel}</span>
           {!settled && <span className="pulse inline-block h-1.5 w-1.5 rounded-full bg-red" aria-hidden />}
@@ -239,8 +249,10 @@ export default function ControlRoom(p: Props) {
           )}
         </div>
       </section>
+  );
 
-      <section className="flex min-h-0 flex-col py-3">
+  const chatPanel = (
+      <section className="flex min-h-0 flex-1 flex-col py-3">
         <PanelHead title="Chat">
           <span>
             {humans.length} human{humans.length === 1 ? '' : 's'} here
@@ -297,6 +309,42 @@ export default function ControlRoom(p: Props) {
           </ol>
         </Follow>
       </section>
+  );
+
+  // Phone: one panel at a time, each filling the screen and scrolling on its own.
+  if (!wide) {
+    const tabs: { key: Tab; label: string; badge?: string }[] = [
+      { key: 'spotlight', label: settled ? 'Decision' : 'Spotlight', badge: settled ? undefined : `R${idx + 1}` },
+      { key: 'actions', label: 'Actions', badge: String(total) },
+      { key: 'chat', label: 'Chat', badge: String(humanNotes.length) },
+    ];
+    return (
+      <div className="flex min-h-0 flex-1 flex-col px-3">
+        <div role="tablist" className="flex shrink-0 gap-1 border-b border-line py-1.5">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 text-[13px] font-semibold ${tab === t.key ? 'bg-ink text-paper' : 'text-ink-2'}`}
+            >
+              {t.label}
+              {t.badge && <span className={`rounded-full px-1.5 text-[10.5px] ${tab === t.key ? 'bg-paper/20' : 'bg-line-2 text-muted'}`}>{t.badge}</span>}
+              {t.key === 'actions' && working.length > 0 && <span className="pulse inline-block h-1.5 w-1.5 rounded-full bg-red" aria-hidden />}
+            </button>
+          ))}
+        </div>
+        {tab === 'spotlight' ? spotlightPanel : tab === 'actions' ? actionsPanel : chatPanel}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto grid w-full max-w-[1480px] min-h-0 flex-1 grid-cols-1 gap-x-6 px-4 sm:px-8 md:grid-cols-[minmax(340px,1.05fr)_minmax(0,1.45fr)_minmax(260px,0.8fr)]">
+      {actionsPanel}
+      {spotlightPanel}
+      {chatPanel}
     </div>
   );
 }
