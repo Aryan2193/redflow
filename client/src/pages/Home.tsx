@@ -9,6 +9,21 @@ import { useAutosize } from '../lib/autosize';
 
 const DEMO_ROOM = ((import.meta.env.VITE_DEMO_ROOM as string | undefined) ?? '').toUpperCase();
 
+const CAST = [
+  { name: 'Claude', role: 'lead', does: 'writes the first answer and every revision', bg: 'bg-red', text: 'text-red' },
+  { name: 'Perplexity', role: 'challenger', does: 'attacks it and checks the facts on the web', bg: 'bg-teal', text: 'text-teal' },
+  { name: 'GPT-5.2', role: 'challenger', does: 'attacks it from a second angle', bg: 'bg-slate', text: 'text-slate' },
+  { name: 'Gemini', role: 'referee', does: 'rules on every fix, took no side', bg: 'bg-warn', text: 'text-warn' },
+];
+
+const ROUNDS = [
+  ['First answer', 'Claude answers alone. The challengers draft their own, blind.'],
+  ['Objections', 'Each challenger quotes the exact claim it disputes and says what would fix it.'],
+  ['Fact check', 'Checkable claims are searched. Each stands or falls, with the source.'],
+  ['Revision', 'Claude changes only what it can justify: an objection, a source, or your note.'],
+  ['Ruling', 'Gemini accepts or rejects each fix. What survives is the decision.'],
+];
+
 export default function Home() {
   const { identity, isActive } = useSpacetimeDB();
   const openRoom = useReducer(reducers.openRoom);
@@ -75,19 +90,23 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-5 pb-16 pt-12 sm:pt-16">
-      <header className="mb-8">
-        <div className="mb-3 flex items-center gap-2">
-          <span className="inline-block h-3 w-3 rounded-full bg-red" aria-hidden />
-          <span className="text-sm font-semibold tracking-wide">Redflow</span>
-          <SignIn className="ml-auto" />
-        </div>
-        <h1 className="font-display text-4xl leading-[1.08] tracking-tight sm:text-5xl" style={{ textWrap: 'balance' }}>
-          Several AI models argue over your question. Your team argues back. Live.
+    <main className="mx-auto max-w-3xl px-5 pb-20 pt-8 sm:pt-12">
+      <div className="mb-10 flex items-center gap-2">
+        <span className="inline-block h-3 w-3 rounded-full bg-red" aria-hidden />
+        <span className="text-sm font-semibold tracking-wide">Redflow</span>
+        <SignIn className="ml-auto" />
+      </div>
+
+      <header>
+        <h1 className="font-display text-[2.4rem] leading-[1.06] tracking-tight sm:text-[3.4rem]" style={{ textWrap: 'balance' }}>
+          Four AI models fight over your question. Your team steps in. Live.
         </h1>
+        <p className="mt-4 max-w-[60ch] text-[17px] leading-relaxed text-ink-2">
+          Ask once. Claude answers, Perplexity and GPT-5.2 attack the answer, the facts get checked on the web, and Gemini rules on every fix. Type at any moment and the models read it on their next move. Two to three minutes to a decision you can defend.
+        </p>
       </header>
 
-      <form onSubmit={onOpen} className="rounded-lg border border-line bg-sheet p-4 sm:p-5">
+      <form onSubmit={onOpen} className="mt-8 rounded-2xl border border-line bg-sheet p-4 sm:p-5">
         <label className="block">
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Your question</span>
           <textarea
@@ -101,8 +120,8 @@ export default function Home() {
               }
             }}
             rows={2}
-            placeholder="A decision, a plan, a claim you want stress-tested. One or two sentences."
-            className="w-full resize-none rounded-md border border-line bg-paper px-3 py-3 text-lg leading-snug outline-none focus:border-ink"
+            placeholder="A decision, a plan, a claim you want stress-tested. One or two sentences, with the numbers you have."
+            className="w-full resize-none rounded-xl border border-line bg-paper px-3 py-3 text-lg leading-snug outline-none focus:border-ink"
             maxLength={2000}
           />
         </label>
@@ -113,68 +132,100 @@ export default function Home() {
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="How the room should call you"
-              className="w-full rounded-md border border-line bg-paper px-3 py-2.5 outline-none focus:border-ink"
+              className="w-full rounded-xl border border-line bg-paper px-3 py-2.5 outline-none focus:border-ink"
               maxLength={32}
               autoComplete="nickname"
             />
           </label>
-          <button
-            type="submit"
-            disabled={busy !== null || !isActive}
-            className="rounded-md bg-red px-5 py-2.5 font-semibold text-paper disabled:opacity-50 sm:min-w-44"
-          >
+          <button type="submit" disabled={busy !== null || !isActive} className="rounded-xl bg-red px-5 py-2.5 font-semibold text-paper disabled:opacity-50 sm:min-w-44">
             {busy === 'open' ? 'Opening the room' : 'Ask the room'}
           </button>
         </div>
-        <p className="mt-2 text-xs text-muted">
-          A room opens around your question. Three models answer blind, then argue. Share the room link so your team can steer.
-        </p>
+        <p className="mt-2 text-xs text-muted">A room opens around your question with a four-letter code. Share it and your team is in with just a name. No account, no password.</p>
       </form>
 
-      <form onSubmit={onJoin} className="mt-4 flex items-end gap-2 rounded-lg border border-line-2 px-4 py-3">
-        <label className="flex-1">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Have a room code?</span>
-          <input
-            value={code}
-            onChange={e => setCode(e.target.value.toUpperCase())}
-            placeholder="7K2P"
-            className="w-full rounded-md border border-line bg-sheet px-3 py-2 font-mono tracking-[0.3em] uppercase outline-none focus:border-ink"
-            maxLength={8}
-            autoCapitalize="characters"
-          />
-        </label>
-        <button type="submit" disabled={busy !== null || !isActive} className="rounded-md border border-ink px-4 py-2 font-semibold disabled:opacity-50">
-          {busy === 'join' ? 'Joining' : 'Join'}
-        </button>
-      </form>
-
-      {error && <p className="mt-3 rounded-md bg-red-soft px-3 py-2 text-sm text-red">{error}</p>}
-
-      {DEMO_ROOM && (
-        <p className="mt-4 text-sm text-ink-2">
-          Want to watch first? Step into the room we are running tonight:{' '}
-          <button onClick={() => navigate(`/r/${DEMO_ROOM}`)} className="font-mono font-semibold tracking-[0.15em] text-ink underline">
-            {DEMO_ROOM}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+        <form onSubmit={onJoin} className="flex flex-1 items-end gap-2 rounded-2xl border border-line-2 px-4 py-3">
+          <label className="flex-1">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Have a room code?</span>
+            <input
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase())}
+              placeholder="7K2P"
+              className="w-full rounded-xl border border-line bg-sheet px-3 py-2 font-mono tracking-[0.3em] uppercase outline-none focus:border-ink"
+              maxLength={8}
+              autoCapitalize="characters"
+            />
+          </label>
+          <button type="submit" disabled={busy !== null || !isActive} className="rounded-xl border border-ink px-4 py-2 font-semibold disabled:opacity-50">
+            {busy === 'join' ? 'Joining' : 'Join'}
           </button>
-        </p>
-      )}
+        </form>
+        {DEMO_ROOM && (
+          <button onClick={() => navigate(`/r/${DEMO_ROOM}`)} className="flex flex-col items-start justify-center rounded-2xl border border-line-2 bg-sheet px-4 py-3 text-left hover:border-ink sm:w-64">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Watch a live room first</span>
+            <span className="mt-1 text-sm text-ink-2">
+              The room we are running today, code <span className="font-mono font-semibold tracking-[0.15em] text-ink">{DEMO_ROOM}</span>. Read the bouts, or start one.
+            </span>
+          </button>
+        )}
+      </div>
 
-      <section className="mt-12 grid gap-4 text-sm text-ink-2 sm:grid-cols-3">
+      {error && <p className="mt-3 rounded-xl bg-red-soft px-3 py-2 text-sm text-red">{error}</p>}
+
+      <section className="mt-14">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Who is in the room</h2>
+        <ul className="mt-3 grid gap-3 sm:grid-cols-4">
+          {CAST.map(c => (
+            <li key={c.name} className="flex items-start gap-2.5">
+              <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-paper ${c.bg}`} aria-hidden>
+                {c.name.charAt(0)}
+              </span>
+              <div className="min-w-0">
+                <div className={`text-[15px] font-semibold ${c.text}`}>
+                  {c.name} <span className="text-xs font-normal text-muted">{c.role}</span>
+                </div>
+                <div className="text-[13.5px] leading-snug text-ink-2">{c.does}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">How a bout runs</h2>
+        <ol className="mt-3 grid gap-4 sm:grid-cols-5">
+          {ROUNDS.map(([title, body], i) => (
+            <li key={title}>
+              <div className="font-fight text-[13px] tracking-wider text-muted">Round {i + 1}</div>
+              <div className="mt-0.5 text-[15px] font-semibold">{title}</div>
+              <div className="mt-1 text-[13.5px] leading-snug text-ink-2">{body}</div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="mt-12 grid gap-5 text-[14.5px] leading-relaxed text-ink-2 sm:grid-cols-3">
         <div>
-          <div className="mb-1 font-semibold text-ink">1. Ask one question</div>
-          Three models from three labs answer it blind. Nobody sees anyone else's draft.
+          <div className="mb-1 font-semibold text-ink">Four labs, not one model in four hats</div>
+          Models from different labs disagree in useful ways. Same model, different prompts, agrees with itself.
         </div>
         <div>
-          <div className="mb-1 font-semibold text-ink">2. Watch the ledger</div>
-          They attack each other's claims. Checkable ones go to the web. A chair rebuilds the answer, one cited edit at a time.
+          <div className="mb-1 font-semibold text-ink">Facts are checked, not asserted</div>
+          Every checkable claim goes to the web and comes back confirmed or disproved, with the page that owns the fact.
         </div>
         <div>
-          <div className="mb-1 font-semibold text-ink">3. Argue back</div>
-          Drop a correction any time. The agents absorb it on their next turn. Every paragraph shows how hard it was fought.
+          <div className="mb-1 font-semibold text-ink">Nothing changes without a reason</div>
+          Every edit to the answer cites an objection, a source, or a teammate by name. Uncaused edits are refused. Anything still disputed stays on the page as an open risk.
         </div>
       </section>
 
-      <footer className="mt-14 text-xs text-muted">Built in 24 hours at Midnight Moonshot, Bengaluru, on SpacetimeDB.</footer>
+      <footer className="mt-16 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+        <span>Built in 24 hours at Midnight Moonshot, Bengaluru, on SpacetimeDB.</span>
+        <a href="https://github.com/Aryan2193/redflow" target="_blank" rel="noreferrer" className="underline">
+          Source on GitHub
+        </a>
+      </footer>
     </main>
   );
 }

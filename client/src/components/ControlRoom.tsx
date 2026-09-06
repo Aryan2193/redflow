@@ -250,7 +250,7 @@ export default function ControlRoom(p: Props) {
           {p.room.brief && (
             <details className="mb-3 rounded-xl border border-line bg-sheet px-3 py-2" open={p.room.brief.length < 600}>
               <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-muted">
-                Context the models read <span className="normal-case tracking-normal">· {p.room.brief.split('\n').length} note{p.room.brief.split('\n').length === 1 ? '' : 's'}</span>
+                Context <span className="normal-case tracking-normal">· {p.room.brief.split('\n').length} note{p.room.brief.split('\n').length === 1 ? '' : 's'}</span>
               </summary>
               <ul className="mt-1.5 space-y-1.5 text-[13px] leading-relaxed text-ink-2">
                 {p.room.brief.split('\n').map((line, i) => (
