@@ -126,3 +126,4 @@
 - Presence blocks (avatar, name, live micro-step, last real moves) now sit under each model's cards instead of above the column. Typing bubbles removed.
 - OpenPets assessed and declined: an Electron desktop companion app driven over local IPC; nothing renders in a web page, judges on phones would never see it, and the pipeline runs on Maincloud, not the laptop.
 - 06:10 Fighters: a small SVG human figure per model stands with its presence block (components/Fighter.tsx). Breathes and blinks idle, types while working, recoils on a hit, lunges when it lands one, guards when a claim stands, staggers when blocked, cheers at the decision; tap it and it says what it is doing. Moments derive from fresh row changes only (useMoments in Arena.tsx), so old bouts stay calm.
+- 06:25 Fighters removed at Aryan's call ("really badly done"). Presence blocks stay: avatar, name, live micro-step, last real moves under each model's cards.
