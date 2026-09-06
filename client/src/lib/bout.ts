@@ -21,10 +21,10 @@ export type BoutItem = Base &
   );
 
 export const ROUNDS: { key: Stage; label: string; short: string }[] = [
-  { key: 'opening', label: 'Opening', short: 'R1' },
-  { key: 'attack', label: 'The attack', short: 'R2' },
+  { key: 'opening', label: 'First answer', short: 'R1' },
+  { key: 'attack', label: 'Objections', short: 'R2' },
   { key: 'facts', label: 'Fact check', short: 'R3' },
-  { key: 'comeback', label: 'Comeback', short: 'R4' },
+  { key: 'comeback', label: 'Revision', short: 'R4' },
   { key: 'ruling', label: 'Ruling', short: 'R5' },
 ];
 
@@ -110,7 +110,7 @@ export function causeOf(p: Paragraph, objections: readonly Objection[], evidence
   const label = (slot: string) => slots.find(s => s.slot === slot)?.label ?? slot;
   if (p.causeType === 'objection') {
     const o = objections.find(x => x.id === p.causeId);
-    return { text: o ? `${label(o.bySlot)} objected` : 'An objection', hl: 'hl-red', stamp: 'Conceded', tone: 'ok' };
+    return { text: o ? `${label(o.bySlot)} objected` : 'An objection', hl: 'hl-red', stamp: 'Changed', tone: 'ok' };
   }
   if (p.causeType === 'evidence') {
     const e = evidence.find(x => x.id === p.causeId);

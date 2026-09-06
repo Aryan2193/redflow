@@ -515,6 +515,17 @@ body {
   animation: pulse-dot 0.9s ease-in-out infinite;
 }
 
+/* The decision card: a warm, unmistakable surface of its own. */
+.decision {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-warn) 14%, var(--color-sheet)) 0%, color-mix(in srgb, var(--color-warn) 6%, var(--color-sheet)) 100%);
+  border: 1px solid color-mix(in srgb, var(--color-warn) 55%, var(--color-line));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-warn) 25%, transparent), 0 12px 32px -20px color-mix(in srgb, var(--color-warn) 60%, transparent);
+}
+.decision-risk {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-red) 10%, var(--color-sheet)) 0%, color-mix(in srgb, var(--color-red) 4%, var(--color-sheet)) 100%);
+  border-color: color-mix(in srgb, var(--color-red) 45%, var(--color-line));
+}
+
 /* Long bodies scroll inside their card, never the page. */
 .card-scroll {
   max-height: 34vh;

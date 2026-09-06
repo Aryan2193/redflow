@@ -95,16 +95,16 @@ function More({ open, onToggle, label = 'See more' }: { open: boolean; onToggle:
 // ---------------------------------------------------------------------------------------------
 
 const OBJ_STAMP: Record<string, { text: string; tone: StampTone }> = {
-  open: { text: 'Hit', tone: 'red' },
-  addressed: { text: 'Answered', tone: 'warn' },
-  withdrawn: { text: 'Fixed', tone: 'ok' },
-  overruled: { text: 'Blocked', tone: 'judg' },
-  unresolved: { text: 'Still open', tone: 'red' },
+  open: { text: 'Objection', tone: 'red' },
+  addressed: { text: 'Fix proposed', tone: 'warn' },
+  withdrawn: { text: 'Fix accepted', tone: 'ok' },
+  overruled: { text: 'Rejected', tone: 'judg' },
+  unresolved: { text: 'Not fixed', tone: 'red' },
 };
 const EV_STAMP: Record<string, { text: string; tone: StampTone }> = {
-  supported: { text: 'Stands', tone: 'ok' },
-  refuted: { text: 'Refuted', tone: 'red' },
-  unclear: { text: 'No call', tone: 'warn' },
+  supported: { text: 'Confirmed', tone: 'ok' },
+  refuted: { text: 'Disproved', tone: 'red' },
+  unclear: { text: 'Unverified', tone: 'warn' },
 };
 
 export function stampOf(item: BoutItem): { text: string; tone: StampTone } | null {
@@ -119,7 +119,7 @@ export function stampOf(item: BoutItem): { text: string; tone: StampTone } | nul
       return { text: 'v1', tone: 'ink' };
     case 'ruling': {
       const fixed = item.group.filter(o => /\| withdrawn: /.test(o.resolution)).length;
-      return fixed === item.group.length ? { text: 'All fixed', tone: 'ok' } : { text: `${item.group.length - fixed} open`, tone: 'red' };
+      return fixed === item.group.length ? { text: 'All fixes accepted', tone: 'ok' } : { text: `${item.group.length - fixed} not fixed`, tone: 'red' };
     }
     default:
       return null;
@@ -272,7 +272,7 @@ function ObjectionBody({ o, ctx, live }: { o: Objection; ctx: CardCtx; live: boo
       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>Section {o.targetOrdinal || '?'}</span>
         <Severity n={o.severity} />
-        {o.severity === 3 && <span className="font-fight text-[12px] tracking-wider text-red">heavy</span>}
+        {o.severity === 3 && <span className="font-fight text-[12px] tracking-wider text-red">severe</span>}
         <Stamp tone={stamp.tone} small className="ml-auto">
           {stamp.text}
         </Stamp>
@@ -343,7 +343,7 @@ function RevisionBody({ item, ctx, live }: { item: Extract<BoutItem, { kind: 're
   return (
     <div>
       <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-        <span>Comeback</span>
+        <span>Revised answer</span>
         <Stamp tone="ink" small>
           Version {v.version}
         </Stamp>
@@ -393,7 +393,7 @@ function RevisionBody({ item, ctx, live }: { item: Extract<BoutItem, { kind: 're
           {overruled.map(o => (
             <li key={o.id.toString()} className="flex flex-wrap items-baseline gap-x-2 text-[14px] leading-relaxed">
               <Stamp tone="judg" small live={live}>
-                Blocked
+                Rejected
               </Stamp>
               <span className="font-semibold">{label(o.bySlot)}</span>
               {more && <span className="text-ink-2">{o.resolution.replace(/^Overruled by the lead:\s*/, '')}</span>}
@@ -420,7 +420,7 @@ function RulingBody({ group, ctx, live }: { group: Objection[]; ctx: CardCtx; li
           return (
             <li key={o.id.toString()} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[14px]">
               <Stamp tone={ok ? 'ok' : 'red'} small live={live}>
-                {ok ? 'Fixed' : 'Still open'}
+                {ok ? 'Fix accepted' : 'Not fixed'}
               </Stamp>
               <span className="text-ink-2">
                 {label(o.bySlot)}{o.targetOrdinal ? `, section ${o.targetOrdinal}` : ''}

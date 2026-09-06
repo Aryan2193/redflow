@@ -102,7 +102,7 @@ export default function Verdict(p: Props) {
 
   return (
     <div>
-      <section className="rounded-2xl border border-ink/70 bg-sheet px-5 py-5 sm:px-7 sm:py-6">
+      <section className={`decision rounded-2xl px-5 py-5 sm:px-7 sm:py-6 ${open.length ? 'decision-risk' : ''}`}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
           <Stamp tone={open.length ? 'red' : 'ok'} live={p.now - toDate(q.settledAt ?? q.updatedAt).getTime() < 8000} className="mr-1">
             {open.length ? 'Decision, with risks' : q.state === 'failed' ? 'Stopped' : 'Decision'}

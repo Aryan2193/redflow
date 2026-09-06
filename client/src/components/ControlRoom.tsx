@@ -35,6 +35,23 @@ function ago(at: number, now: number): string {
 // One agent action: what happened, by whom, in which colour.
 type Action = { key: string; at: number; kind: string; sp: Speaker; text: string; url?: string; live?: boolean };
 
+// Plain words for what an agent did, and a colour for each.
+const KIND_LABEL: Record<string, string> = {
+  read: 'Read',
+  search: 'Searched the web',
+  open: 'Opened a page',
+  write: 'Wrote',
+  hit: 'Objected',
+  heavy: 'Objected, severe',
+  stands: 'Fact confirmed',
+  refuted: 'Fact disproved',
+  'no call': 'Could not verify',
+  fixed: 'Fix accepted',
+  'still open': 'Fix rejected',
+  blocked: 'Rejected an objection',
+  version: 'New version',
+  now: 'Working now',
+};
 const KIND_PILL: Record<string, string> = {
   read: 'bg-judg-soft text-judg',
   search: 'bg-teal-soft text-teal',
@@ -126,13 +143,13 @@ export default function ControlRoom(p: Props) {
     const at = (ts: { microsSinceUnixEpoch: bigint }) => toDate(ts).getTime();
     const out: Action[] = [];
     for (const e of p.events) out.push({ key: 'e' + e.id, at: at(e.createdAt), kind: e.kind, sp: sp(e.slot), text: e.kind === 'open' ? `opened ${hostOf(e.url || e.detail.replace(/^opened /, ''))}` : e.detail, url: safeUrl(e.url) });
-    for (const o of p.objections) out.push({ key: 'o' + o.id, at: at(o.createdAt), kind: o.severity === 3 ? 'heavy' : 'hit', sp: sp(o.bySlot), text: `section ${o.targetOrdinal || '?'}: “${unquote(o.claim)}”` });
-    for (const e of p.evidence) out.push({ key: 'ev' + e.id, at: at(e.createdAt), kind: e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'no call', sp: sp('checker'), text: `“${unquote(e.claim)}”`, url: safeUrl(e.url) });
-    for (const v of p.versions) out.push({ key: 'v' + v.id, at: at(v.createdAt), kind: 'version', sp: sp('council_a'), text: v.version === 1 ? 'first answer is up' : `comeback, version ${v.version}` });
+    for (const o of p.objections) out.push({ key: 'o' + o.id, at: at(o.createdAt), kind: o.severity === 3 ? 'heavy' : 'hit', sp: sp(o.bySlot), text: `to section ${o.targetOrdinal || '?'}: “${unquote(o.claim)}”` });
+    for (const e of p.evidence) out.push({ key: 'ev' + e.id, at: at(e.createdAt), kind: e.verdict === 'supported' ? 'stands' : e.verdict === 'refuted' ? 'refuted' : 'no call', sp: sp('checker'), text: `“${unquote(e.claim)}”${e.url ? ` (${hostOf(e.url)})` : ''}`, url: safeUrl(e.url) });
+    for (const v of p.versions) out.push({ key: 'v' + v.id, at: at(v.createdAt), kind: 'version', sp: sp('council_a'), text: v.version === 1 ? 'published the first answer' : `published version ${v.version} of the answer` });
     for (const o of p.objections) {
-      if (o.status === 'overruled' && o.resolution.startsWith('Overruled by the lead')) out.push({ key: 'b' + o.id, at: at(o.updatedAt), kind: 'blocked', sp: sp('council_a'), text: `${sp(o.bySlot).name} on section ${o.targetOrdinal || '?'}` });
+      if (o.status === 'overruled' && o.resolution.startsWith('Overruled by the lead')) out.push({ key: 'b' + o.id, at: at(o.updatedAt), kind: 'blocked', sp: sp('council_a'), text: `${sp(o.bySlot).name}'s objection to section ${o.targetOrdinal || '?'}` });
       const tail = o.resolution.split(' | ').pop() ?? '';
-      if (/^(withdrawn|held):/.test(tail)) out.push({ key: 'r' + o.id, at: at(o.updatedAt), kind: /^withdrawn/.test(tail) ? 'fixed' : 'still open', sp: sp(refereeSlot), text: `${sp(o.bySlot).name} on section ${o.targetOrdinal || '?'}` });
+      if (/^(withdrawn|held):/.test(tail)) out.push({ key: 'r' + o.id, at: at(o.updatedAt), kind: /^withdrawn/.test(tail) ? 'fixed' : 'still open', sp: sp(refereeSlot), text: `${sp(o.bySlot).name}'s objection to section ${o.targetOrdinal || '?'}` });
     }
     out.sort((a, b) => b.at - a.at);
     const live: Action[] = working.map(s => ({ key: 'now' + s.slot, at: Number.MAX_SAFE_INTEGER, kind: 'now', sp: sp(s.slot), text: microStep(s.state, s.slot, tick - toDate(s.updatedAt).getTime()), live: true }));
@@ -167,9 +184,9 @@ export default function ControlRoom(p: Props) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <span className={`font-semibold ${TONE_TEXT[a.sp.tone]}`}>{a.sp.name}</span>
-                    <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-px font-mono text-[10px] uppercase tracking-wider ${KIND_PILL[a.kind] ?? 'bg-judg-soft text-judg'}`}>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-px text-[11px] font-semibold ${KIND_PILL[a.kind] ?? 'bg-judg-soft text-judg'}`}>
                       {a.live && <span className="pulse inline-block h-1.5 w-1.5 rounded-full bg-red" aria-hidden />}
-                      {a.kind}
+                      {KIND_LABEL[a.kind] ?? a.kind}
                     </span>
                     {!a.live && <span className="ml-auto text-[11px] text-muted">{ago(a.at, p.now)}</span>}
                   </div>
