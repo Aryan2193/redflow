@@ -15,7 +15,8 @@ export default function SignIn({ className = '' }: { className?: string }) {
   if (!auth) return null;
   if (auth.isLoading) return <span className={`text-xs text-muted ${className}`}>Checking sign-in</span>;
   if (auth.isAuthenticated) {
-    const who = auth.user?.profile.email || auth.user?.profile.preferred_username || '';
+    // Anonymous SpacetimeAuth users carry an opaque id as their username; only a real email is worth showing.
+    const who = auth.user?.profile.email || '';
     return (
       <span className={`inline-flex flex-wrap items-center gap-2 text-xs text-ink-2 ${className}`}>
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
