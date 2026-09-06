@@ -6,6 +6,7 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddContextReducer from "../add_context_reducer";
 import AskReducer from "../ask_reducer";
 import CreateRoomReducer from "../create_room_reducer";
 import GoDeeperReducer from "../go_deeper_reducer";
@@ -24,6 +25,7 @@ import SetSiteUrlReducer from "../set_site_url_reducer";
 import StartWatchdogReducer from "../start_watchdog_reducer";
 import WrapUpReducer from "../wrap_up_reducer";
 
+export type AddContextParams = __Infer<typeof AddContextReducer>;
 export type AskParams = __Infer<typeof AskReducer>;
 export type CreateRoomParams = __Infer<typeof CreateRoomReducer>;
 export type GoDeeperParams = __Infer<typeof GoDeeperReducer>;

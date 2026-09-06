@@ -34,6 +34,7 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddContextReducer from "./add_context_reducer";
 import AskReducer from "./ask_reducer";
 import CreateRoomReducer from "./create_room_reducer";
 import GoDeeperReducer from "./go_deeper_reducer";
@@ -274,6 +275,7 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("add_context", AddContextReducer),
   __reducerSchema("ask", AskReducer),
   __reducerSchema("create_room", CreateRoomReducer),
   __reducerSchema("go_deeper", GoDeeperReducer),

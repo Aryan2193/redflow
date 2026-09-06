@@ -122,8 +122,15 @@ export default function Verdict(p: Props) {
           </h2>
         )}
 
+        <div className="mt-3">
+          <div className={eyebrow}>The answer</div>
+          <div className="chat-md mt-1.5 text-[16px] text-ink sm:text-[17px]">
+            <Markdown remarkPlugins={[remarkGfm]}>{first.text}</Markdown>
+          </div>
+        </div>
+
         {changes.length > 0 ? (
-          <div className="mt-4">
+          <div className="mt-4 border-t border-black/10 pt-4">
             <div className={eyebrow}>What the debate changed</div>
             <ul className="mt-2 space-y-2 text-[14.5px] leading-relaxed text-ink">
               {changes.map(c => (
@@ -138,15 +145,8 @@ export default function Verdict(p: Props) {
             </ul>
           </div>
         ) : (
-          <p className="mt-4 text-[14px] text-ink-2">{p.objections.length ? 'Every objection was answered without changing the text.' : 'Nobody objected. The first answer stood as written.'}</p>
+          <p className="mt-4 border-t border-black/10 pt-4 text-[14px] text-ink-2">{p.objections.length ? 'Every objection was answered without changing the text.' : 'Nobody objected. The first answer stood as written.'}</p>
         )}
-
-        <div className="mt-4 border-t border-line pt-4">
-          <div className={eyebrow}>The answer</div>
-          <div className="chat-md mt-1.5 text-[16px] text-ink sm:text-[17px]">
-            <Markdown remarkPlugins={[remarkGfm]}>{first.text}</Markdown>
-          </div>
-        </div>
 
         {open.length > 0 && (
           <div className="mt-4 rounded-lg border border-red/50 bg-red-soft/60 px-3.5 py-3">

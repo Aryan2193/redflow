@@ -517,9 +517,9 @@ body {
 
 /* The decision card: a warm, unmistakable surface of its own. */
 .decision {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-warn) 14%, var(--color-sheet)) 0%, color-mix(in srgb, var(--color-warn) 6%, var(--color-sheet)) 100%);
-  border: 1px solid color-mix(in srgb, var(--color-warn) 55%, var(--color-line));
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-warn) 25%, transparent), 0 12px 32px -20px color-mix(in srgb, var(--color-warn) 60%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-ok) 11%, var(--color-sheet)) 0%, color-mix(in srgb, var(--color-ok) 4%, var(--color-sheet)) 100%);
+  border: 1px solid color-mix(in srgb, var(--color-ok) 45%, var(--color-line));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-ok) 20%, transparent), 0 12px 32px -20px color-mix(in srgb, var(--color-ok) 50%, transparent);
 }
 .decision-risk {
   background: linear-gradient(180deg, color-mix(in srgb, var(--color-red) 10%, var(--color-sheet)) 0%, color-mix(in srgb, var(--color-red) 4%, var(--color-sheet)) 100%);

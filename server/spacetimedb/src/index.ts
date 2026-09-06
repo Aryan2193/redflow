@@ -559,6 +559,20 @@ function activeQuestion(db: Db, roomId: bigint) {
   return latest;
 }
 
+// Standing context for the whole room: background, numbers, constraints, links. Every model reads it on every
+// step of every question, so it is the place for anything that should not have to be repeated.
+export const addContext = spacetimedb.reducer({ roomId: t.u64(), text: t.string() }, (ctx, { roomId, text }) => {
+  const m = requireMember(ctx, roomId);
+  const r = ctx.db.room.id.find(roomId);
+  if (!r) throw new SenderError('no such room');
+  const body = text.replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 4000);
+  if (body.length < 3) throw new SenderError('add a little more than that');
+  const line = `${m.name}: ${body}`;
+  const next = (r.brief ? r.brief + '\n' : '') + line;
+  if (next.length > 12000) throw new SenderError('the room context is full. Keep it under 12,000 characters in total');
+  ctx.db.room.id.update({ ...r, brief: next });
+});
+
 export const postNote = spacetimedb.reducer(
   { roomId: t.u64(), text: t.string(), teamQuestionId: t.u64() },
   (ctx, { roomId, text, teamQuestionId }) => {
@@ -1029,7 +1043,7 @@ const SECTION_SCHEMA = {
 };
 
 function briefBlock(r: any, q: any) {
-  const brief = r?.brief ? `\n${r.brief}` : '';
+  const brief = r?.brief ? `\nContext the team added, true for their situation, one line per person:\n${r.brief}` : '';
   return `<room_brief>\nTitle: ${r?.title ?? ''}${brief}\n</room_brief>\n<question asked_by="${q.askedByName}">\n${q.text}\n</question>`;
 }
 

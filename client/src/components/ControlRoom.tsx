@@ -246,7 +246,28 @@ export default function ControlRoom(p: Props) {
             {humans.length} human{humans.length === 1 ? '' : 's'} here
           </span>
         </PanelHead>
-        <Follow sig={humanNotes.map(n => n.id.toString()).join('|')} className="pr-1">
+        <Follow sig={humanNotes.map(n => n.id.toString()).join('|') + '|' + p.room.brief.length} className="pr-1">
+          {p.room.brief && (
+            <details className="mb-3 rounded-xl border border-line bg-sheet px-3 py-2" open={p.room.brief.length < 600}>
+              <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-muted">
+                Context the models read <span className="normal-case tracking-normal">· {p.room.brief.split('\n').length} note{p.room.brief.split('\n').length === 1 ? '' : 's'}</span>
+              </summary>
+              <ul className="mt-1.5 space-y-1.5 text-[13px] leading-relaxed text-ink-2">
+                {p.room.brief.split('\n').map((line, i) => (
+                  <li key={i} className="whitespace-pre-wrap">
+                    {line.includes(': ') ? (
+                      <>
+                        <span className="font-semibold text-ink">{line.slice(0, line.indexOf(': '))}</span>
+                        {line.slice(line.indexOf(': '))}
+                      </>
+                    ) : (
+                      line
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           <ol className="space-y-3">
             <li className="flex gap-2">
               <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-paper" aria-hidden>
