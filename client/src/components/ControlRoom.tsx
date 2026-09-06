@@ -122,10 +122,26 @@ export default function ControlRoom(p: Props) {
   const leadName = p.slots.find(s => s.slot === 'council_a')?.label ?? 'The lead';
   const sp = (slot: string) => speakerFor(slot, p.slots);
   const wide = useMediaQuery('(min-width: 768px)');
+  // On a phone the tabs follow the fight by themselves: a new card opens Spotlight, a human message opens Chat, the
+  // decision opens Spotlight. Tapping a tab pauses that for a while so nothing is yanked away mid-read.
   const [tab, setTab] = useState<Tab>('spotlight');
-  // When the decision lands, a phone shows it.
+  const [follow, setFollow] = useState(true);
+  const pauseUntil = useRef(0);
+  const pickTab = (t: Tab) => {
+    setTab(t);
+    setFollow(false);
+    pauseUntil.current = Date.now() + 45_000;
+  };
   useEffect(() => {
-    if (settled) setTab('spotlight');
+    if (follow) return;
+    const t = setTimeout(() => setFollow(true), Math.max(0, pauseUntil.current - Date.now()));
+    return () => clearTimeout(t);
+  }, [follow]);
+  useEffect(() => {
+    if (settled) {
+      setTab('spotlight');
+      setFollow(true);
+    }
   }, [settled]);
 
   // Narrated micro-steps rotate while agents work.
@@ -176,6 +192,23 @@ export default function ControlRoom(p: Props) {
   const ctx: CardCtx = { paragraphs: p.paragraphs, objections: p.objections, evidence: p.evidence, notes: p.notes, slots: p.slots, now: p.now, leadName };
   const humanNotes = p.notes.slice().sort((a, b) => Number(a.id - b.id));
   const roundLabel = settled ? (q.state === 'failed' ? 'stopped' : openRisks ? `decided, ${openRisks} open` : 'decided') : `round ${idx + 1} · ${ROUNDS[Math.min(idx, 4)].label}`;
+
+  // Follow the fight on a phone.
+  const spotKey = spotlight?.key ?? '';
+  const noteCount = humanNotes.length;
+  const seen = useRef({ spot: spotKey, notes: noteCount });
+  useEffect(() => {
+    if (wide) return;
+    if (spotKey !== seen.current.spot && follow && !settled) setTab('spotlight');
+    seen.current.spot = spotKey;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotKey]);
+  useEffect(() => {
+    if (wide) return;
+    if (noteCount > seen.current.notes && follow) setTab('chat');
+    seen.current.notes = noteCount;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteCount]);
 
   const actionsPanel = (
       <section className="flex min-h-0 flex-1 flex-col py-3">
@@ -326,7 +359,7 @@ export default function ControlRoom(p: Props) {
               key={t.key}
               role="tab"
               aria-selected={tab === t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => pickTab(t.key)}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 text-[13px] font-semibold ${tab === t.key ? 'bg-ink text-paper' : 'text-ink-2'}`}
             >
               {t.label}
@@ -334,6 +367,18 @@ export default function ControlRoom(p: Props) {
               {t.key === 'actions' && working.length > 0 && <span className="pulse inline-block h-1.5 w-1.5 rounded-full bg-red" aria-hidden />}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              setFollow(true);
+              pauseUntil.current = 0;
+            }}
+            className={`shrink-0 rounded-full px-2 py-1.5 text-[11px] font-semibold ${follow ? 'text-red' : 'text-muted'}`}
+            title={follow ? 'Following the fight. Tap a tab to pause.' : 'Paused. Tap to follow the fight again.'}
+          >
+            <span className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${follow ? 'pulse bg-red' : 'bg-line'}`} aria-hidden />
+            {follow ? 'Live' : 'Paused'}
+          </button>
         </div>
         {tab === 'spotlight' ? spotlightPanel : tab === 'actions' ? actionsPanel : chatPanel}
       </div>

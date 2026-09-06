@@ -62,6 +62,7 @@ export default function Room({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   const [explain, setExplain] = useState(false);
   const [asking, setAsking] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 5000);
@@ -131,41 +132,13 @@ export default function Room({ code }: { code: string }) {
     <div className="flex h-dvh flex-col">
       <header className="shrink-0 border-b border-line bg-paper">
         <div className="mx-auto flex max-w-[1480px] flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 sm:px-8">
-          <button onClick={() => navigate('/')} className="flex shrink-0 items-center gap-2" aria-label="Redflow home">
+          {/* On a phone the header is two tidy rows, brand and code first, actions second. On desktop both rows flatten into one line. */}
+          <div className="flex w-full min-w-0 items-center gap-3 md:contents">
+          <button onClick={() => navigate('/')} className="flex shrink-0 items-center gap-2 md:order-1" aria-label="Redflow home">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-red" aria-hidden />
             <span className="text-sm font-semibold">Redflow</span>
           </button>
-          <div className="min-w-0 flex-1 truncate text-sm text-ink-2">{room.title}</div>
-          {ordered.length > 1 && (
-            <select
-              value={(question?.id ?? 0n).toString()}
-              onChange={e => {
-                const id = BigInt(e.target.value);
-                setViewQid(id === latestId ? null : id);
-              }}
-              className="order-last min-w-0 basis-full rounded-md border border-line bg-sheet px-2 py-1 text-xs text-ink sm:order-none sm:max-w-xs sm:basis-auto"
-              aria-label="Which bout to show"
-            >
-              {ordered.map((x, i) => (
-                <option key={x.id.toString()} value={x.id.toString()}>
-                  Bout {i + 1}: {x.text.slice(0, 48)}
-                  {x.text.length > 48 ? '...' : ''}
-                </option>
-              ))}
-            </select>
-          )}
-          {busy && latest ? (
-            <button onClick={() => wrapUp({ questionId: latest.id }).catch(() => {})} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink-2 hover:border-ink" title="Stop the bout and decide with what stands">
-              Wrap it up
-            </button>
-          ) : (
-            <button onClick={() => setAsking(true)} className="shrink-0 whitespace-nowrap rounded-full bg-red px-2.5 py-0.5 text-xs font-semibold text-paper" title="Start a new question in this room">
-              New question
-            </button>
-          )}
-          <button onClick={() => setExplain(v => !v)} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-xs text-ink-2" aria-label="How this works">
-            {explain ? 'Close' : <><span className="sm:hidden">How</span><span className="hidden sm:inline">How this works</span></>}
-          </button>
+          <div className="min-w-0 flex-1 truncate text-sm text-ink-2 md:order-2">{room.title}</div>
           <button
             onClick={() => {
               navigator.clipboard
@@ -176,11 +149,49 @@ export default function Room({ code }: { code: string }) {
                 })
                 .catch(() => {});
             }}
-            className="shrink-0 rounded-md border border-line bg-sheet px-2.5 py-1 font-mono text-sm tracking-[0.2em]"
+            className="shrink-0 rounded-md border border-line bg-sheet px-2.5 py-1 font-mono text-sm tracking-[0.2em] md:order-7"
             title="Copy the room link"
           >
             {copied ? <span className="font-sans tracking-normal text-ok">Link copied</span> : room.code}
           </button>
+          </div>
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 md:contents">
+          {ordered.length > 1 && (
+            <select
+              value={(question?.id ?? 0n).toString()}
+              onChange={e => {
+                const id = BigInt(e.target.value);
+                setViewQid(id === latestId ? null : id);
+              }}
+              className="order-last min-w-0 basis-full rounded-md border border-line bg-sheet px-2 py-1 text-xs text-ink md:order-3 md:max-w-xs md:basis-auto"
+              aria-label="Which bout to show"
+            >
+              {ordered.map((x, i) => (
+                <option key={x.id.toString()} value={x.id.toString()}>
+                  Bout {i + 1}: {x.text.slice(0, 48)}
+                  {x.text.length > 48 ? '...' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          {question && (
+            <button onClick={() => setContextOpen(v => !v)} className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold md:order-4 md:hidden ${contextOpen ? 'border-ink bg-ink text-paper' : 'border-line text-ink-2'}`} title="Give every model background for this whole room">
+              Add context
+            </button>
+          )}
+          {busy && latest ? (
+            <button onClick={() => wrapUp({ questionId: latest.id }).catch(() => {})} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink-2 hover:border-ink md:order-5" title="Stop the bout and decide with what stands">
+              Wrap it up
+            </button>
+          ) : (
+            <button onClick={() => setAsking(true)} className="shrink-0 whitespace-nowrap rounded-full bg-red px-2.5 py-0.5 text-xs font-semibold text-paper md:order-5" title="Start a new question in this room">
+              New question
+            </button>
+          )}
+          <button onClick={() => setExplain(v => !v)} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-xs text-ink-2 md:order-6" aria-label="How this works">
+            {explain ? 'Close' : <><span className="sm:hidden">How</span><span className="hidden sm:inline">How this works</span></>}
+          </button>
+          </div>
         </div>
         {explain && (
           <div className="border-t border-line-2 bg-sheet">
@@ -229,7 +240,7 @@ export default function Room({ code }: { code: string }) {
         </div>
       )}
 
-      <Composer room={room} question={latest} queued={queued} asking={asking} onAskingChange={setAsking} onSent={() => setViewQid(null)} />
+      <Composer room={room} question={latest} queued={queued} asking={asking} onAskingChange={setAsking} contextOpen={contextOpen} onContextOpenChange={setContextOpen} onSent={() => setViewQid(null)} />
     </div>
   );
 }

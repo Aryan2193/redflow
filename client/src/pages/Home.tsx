@@ -10,18 +10,34 @@ import { useAutosize } from '../lib/autosize';
 const DEMO_ROOM = ((import.meta.env.VITE_DEMO_ROOM as string | undefined) ?? '').toUpperCase();
 
 const CAST = [
-  { name: 'Claude', role: 'lead', does: 'Writes the answer, then defends it. Changes a line only with a reason it can point to.', bg: 'bg-red', text: 'text-red' },
-  { name: 'Perplexity', role: 'challenger', does: 'Attacks the answer, then checks every disputed fact against the page that owns it.', bg: 'bg-teal', text: 'text-teal' },
-  { name: 'GPT-5.2', role: 'challenger', does: 'Attacks from a second angle. When nobody objects, it is made to argue the other side.', bg: 'bg-slate', text: 'text-slate' },
-  { name: 'Gemini', role: 'referee', does: 'Took no side. Accepts or rejects each fix. What it lets through is the decision.', bg: 'bg-warn', text: 'text-warn' },
+  { name: 'Claude', role: 'writes and defends', does: 'Writes the full answer alone, then rewrites only what fell. Every changed line names the objection, the source, or the teammate behind it.', bg: 'bg-red', text: 'text-red' },
+  { name: 'Perplexity', role: 'attacks and checks', does: 'Quotes the exact line it disputes and says what would fix it. Then takes every checkable claim to the web and links the page that owns the fact.', bg: 'bg-teal', text: 'text-teal' },
+  { name: 'GPT-5.2', role: 'attacks from the other side', does: 'A second, independent attack. When the room agrees too easily, it is made to argue the opposite case so agreement has to be earned.', bg: 'bg-slate', text: 'text-slate' },
+  { name: 'Gemini', role: 'rules', does: 'Never wrote a word of the answer and never attacked it. Accepts or rejects each fix. Whatever it lets through becomes the decision.', bg: 'bg-warn', text: 'text-warn' },
 ];
 
 const ROUNDS = [
-  ['First answer', 'Claude answers in full, alone. The challengers write their own, blind, so nobody copies anybody.'],
-  ['Objections', 'Each challenger quotes the exact line it disputes, says why it is wrong, and gives the fix.'],
-  ['Fact check', 'Every checkable claim is searched. It comes back confirmed or disproved, with the source.'],
-  ['Revision', 'Claude rewrites what fell and defends what stood. Every edit names its cause: an objection, a source, or you.'],
-  ['Ruling', 'Gemini accepts or rejects each fix. Whatever is still disputed stays on the page as an open risk.'],
+  ['First answer', 'Claude answers in full, alone. Perplexity and GPT write their own without seeing it, so nobody copies anybody.'],
+  ['Objections', 'Each challenger quotes the exact line it disputes, says why it is wrong, and gives the fix. Vague disagreement is thrown out.'],
+  ['Fact check', 'Every checkable claim is searched on the live web. It comes back confirmed or disproved, with the page linked.'],
+  ['Revision', 'Claude rewrites what fell and defends what stood. An edit with no objection, source, or teammate behind it is refused.'],
+  ['Ruling', 'Gemini accepts or rejects each fix. What is still disputed stays on the page as an open risk instead of quietly disappearing.'],
+];
+
+// Real questions teams have put to the public room. Tap one and it is in the box.
+const EXAMPLES = [
+  'We run a small design studio with six people. A client wants a 40 percent discount for a 12-month retainer. Should we take it, counter, or walk away? Our utilisation is about 70 percent and we have two months of cash.',
+  'Our two-founder startup has 40 paying teams at 999 rupees a month. Should we raise a 2 crore angel round now at a 15 crore valuation, or bootstrap six more months and raise on better numbers? 14 months of runway either way.',
+  'Should our first hire be a full-stack engineer or a customer success person? We ship weekly, churn is about 6 percent a month, and support takes 2 hours a day of founder time.',
+];
+const EXAMPLE_SHORT = ['Take the 40 percent discount?', 'Raise now or bootstrap?', 'Engineer or customer success first?'];
+
+const VERSUS: [string, string][] = [
+  ['One model agrees with itself, and is wrong together.', 'Four models from four labs. They disagree in the places that matter.'],
+  ['States facts. You check them, or you do not.', 'Every checkable claim goes to the web and comes back confirmed or disproved, page linked.'],
+  ['Rewrites the answer and you never see what changed.', 'Every edit names its cause. Edits without a cause are refused by the system.'],
+  ['One person, one chat window.', 'Your whole team in one room from any phone. A four-letter code, a name, no password.'],
+  ['You read the output when it is done.', 'You watch every move as it happens and step in mid-fight. Your note is read on the very next turn.'],
 ];
 
 export default function Home() {
@@ -98,14 +114,15 @@ export default function Home() {
       </div>
 
       <header>
-        <h1 className="font-display text-[2.4rem] leading-[1.06] tracking-tight sm:text-[3.4rem]" style={{ textWrap: 'balance' }}>
-          Four AI models fight over your question. Your team steps in. Live.
+        <p className="font-fight text-[13px] uppercase tracking-[0.18em] text-red">Decisions that survived a fight</p>
+        <h1 className="font-display mt-2 text-[2.4rem] leading-[1.06] tracking-tight sm:text-[3.4rem]" style={{ textWrap: 'balance' }}>
+          One AI gives you an answer. Four fighting over it give you a decision.
         </h1>
         <p className="mt-4 max-w-[62ch] text-[17px] leading-relaxed text-ink-2">
-          One model's answer is a first draft nobody checked. Redflow makes four models from four labs earn it: one writes, two attack, the facts get checked on the web, and a referee rules on every fix. You watch it happen and interrupt whenever you know better.
+          Ask once. Claude writes the answer. Perplexity and GPT attack it line by line. The disputed facts get checked on the live web. Gemini, who took no side, rules on every fix. Your team watches it all happen and interrupts the moment it knows better.
         </p>
         <p className="mt-3 max-w-[62ch] text-[15px] leading-relaxed text-ink-2">
-          Three minutes later you have a decision that survived a fight, with every changed line traced to the objection, the source, or the teammate that changed it.
+          About three minutes later you hold a decision with the answer on top, the open risks still visible, and every changed line traced to the objection, the source, or the teammate who changed it.
         </p>
       </header>
 
@@ -128,6 +145,23 @@ export default function Home() {
             maxLength={2000}
           />
         </label>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <span className="py-1 text-xs text-muted">Try one:</span>
+          {EXAMPLES.map((ex, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                setQuestion(ex);
+                qRef.current?.focus();
+              }}
+              className="max-w-full truncate rounded-full border border-line-2 bg-paper px-2.5 py-1 text-left text-xs text-ink-2 hover:border-ink"
+              title={ex}
+            >
+              {EXAMPLE_SHORT[i]}
+            </button>
+          ))}
+        </div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="flex-1">
             <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted">Your name</span>
@@ -141,10 +175,10 @@ export default function Home() {
             />
           </label>
           <button type="submit" disabled={busy !== null || !isActive} className="rounded-xl bg-red px-5 py-2.5 font-semibold text-paper disabled:opacity-50 sm:min-w-44">
-            {busy === 'open' ? 'Opening the room' : 'Ask the room'}
+            {busy === 'open' ? 'Opening the room' : 'Start the fight'}
           </button>
         </div>
-        <p className="mt-2 text-xs text-muted">Your question opens a room with a four-letter code. Anyone with the code is in with just a name, on any phone, and everything they type reaches the models on their next move.</p>
+        <p className="mt-2 text-xs text-muted">Your question opens a room with a four-letter code. Send the code to your team. They are in with just a name, from any phone, and everything they type reaches the models on their next move.</p>
       </form>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
@@ -166,9 +200,9 @@ export default function Home() {
         </form>
         {DEMO_ROOM && (
           <button onClick={() => navigate(`/r/${DEMO_ROOM}`)} className="flex flex-col items-start justify-center rounded-2xl border border-line-2 bg-sheet px-4 py-3 text-left hover:border-ink sm:w-64">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Watch one first</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Watch a real one first</span>
             <span className="mt-1 text-sm text-ink-2">
-              Our public room, code <span className="font-mono font-semibold tracking-[0.15em] text-ink">{DEMO_ROOM}</span>. Read the bouts that already ran, or ask it something.
+              Public room <span className="font-mono font-semibold tracking-[0.15em] text-ink">{DEMO_ROOM}</span>. Twelve bouts already fought, every move on record. Or ask it something yourself.
             </span>
           </button>
         )}
@@ -176,9 +210,26 @@ export default function Home() {
 
       {error && <p className="mt-3 rounded-xl bg-red-soft px-3 py-2 text-sm text-red">{error}</p>}
 
+      <section className="mt-14 rounded-2xl border border-line bg-sheet p-5 sm:p-6">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">What came out of one bout, unedited</h2>
+        <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
+          A six-person design studio asked whether to take a 40 percent discount for a 12-month retainer. Utilisation 70 percent, two months of cash. Six minutes and 44 seconds later, version 3 of the answer read:
+        </p>
+        <p className="font-display mt-3 text-[1.55rem] leading-tight text-ink">Counter, cap the deal size, don't lock 12 months upfront.</p>
+        <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">
+          Offer 15 to 20 percent off card rate, capped at 25 percent of team capacity with one named person, two months of fees in escrow before signing, a 3-month initial term with renewal. Walk away if they will not shrink below 35 percent of revenue or will not escrow.
+        </p>
+        <ul className="mt-3 space-y-1.5 text-[13.5px] leading-snug text-ink-2">
+          <li><span className="rounded bg-red-soft px-1.5 py-0.5 font-semibold text-red">Perplexity objected</span> and 40 percent became acceptable only if the scope shrinks to match.</li>
+          <li><span className="rounded bg-teal-soft px-1.5 py-0.5 font-semibold text-teal">A fact check</span> against a published margin source made the incremental-only assumption explicit.</li>
+          <li><span className="rounded bg-warn-soft px-1.5 py-0.5 font-semibold text-warn">Gemini ruled</span> on each fix. The first draft's 12-month lock did not survive.</li>
+        </ul>
+        <p className="mt-3 text-xs text-muted">Bout 12 in the public room. Open it and read every move.</p>
+      </section>
+
       <section className="mt-14">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Who is in the room</h2>
-        <ul className="mt-3 grid gap-3 sm:grid-cols-4">
+        <ul className="mt-3 grid gap-4 sm:grid-cols-2">
           {CAST.map(c => (
             <li key={c.name} className="flex items-start gap-2.5">
               <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-paper ${c.bg}`} aria-hidden>
@@ -206,6 +257,29 @@ export default function Home() {
             </li>
           ))}
         </ol>
+        <p className="mt-3 text-[13.5px] text-ink-2">If a teammate's note or new context arrives late, the room does not decide. It runs one more pass first. Nothing you typed is ever left unread.</p>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Why not just ask one model</h2>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[520px] text-left text-[14px] leading-snug">
+            <thead>
+              <tr className="text-xs uppercase tracking-wider text-muted">
+                <th className="w-1/2 pb-2 pr-4 font-semibold">One model, one chat</th>
+                <th className="w-1/2 pb-2 font-semibold text-red">Redflow</th>
+              </tr>
+            </thead>
+            <tbody>
+              {VERSUS.map(([a, b]) => (
+                <tr key={a} className="border-t border-line-2 align-top">
+                  <td className="py-2.5 pr-4 text-muted">{a}</td>
+                  <td className="py-2.5 text-ink">{b}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="mt-12">
@@ -217,32 +291,22 @@ export default function Home() {
           </li>
           <li>
             <div className="mb-1 font-semibold text-ink">Add context once</div>
-            Paste the background, the numbers, the constraints. Every model reads it on every move, for every question in the room.
+            Paste the background, the numbers, the constraints. Every model reads it on every move, for every question the room ever asks.
           </li>
           <li>
             <div className="mb-1 font-semibold text-ink">Watch every move</div>
-            Each search, each page opened, each objection and ruling shows up the second it happens. Nothing is hidden behind a spinner.
+            Each search, each page opened, each objection and ruling appears the second it happens. Nothing hides behind a spinner.
           </li>
         </ul>
       </section>
 
-      <section className="mt-12 grid gap-5 text-[14.5px] leading-relaxed text-ink-2 sm:grid-cols-3">
-        <div>
-          <div className="mb-1 font-semibold text-ink">Four labs, not one model in four hats</div>
-          Models from different labs disagree in useful ways. One model with four prompts agrees with itself, and is wrong together.
-        </div>
-        <div>
-          <div className="mb-1 font-semibold text-ink">Checked, not asserted</div>
-          Every checkable claim goes to the web and comes back confirmed or disproved, with the page that owns the fact linked.
-        </div>
-        <div>
-          <div className="mb-1 font-semibold text-ink">Nothing changes without a reason</div>
-          Every edit cites an objection, a source, or a teammate. Edits with no cause are refused by the system. What is still disputed stays visible as an open risk instead of quietly disappearing.
-        </div>
+      <section className="mt-12 rounded-2xl border border-line-2 p-5 text-[14.5px] leading-relaxed text-ink-2">
+        <div className="mb-1 font-semibold text-ink">Built for the moment before you commit</div>
+        Pricing a deal, picking a vendor, choosing the first hire, taking the round or not. Any question where being confidently wrong is expensive and one person's judgment is not enough. The founders, the studio, the product team, all in one room, on whatever they have in their hands.
       </section>
 
       <footer className="mt-16 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-        <span>Built in 24 hours at Midnight Moonshot, Bengaluru. The whole debate runs inside a SpacetimeDB module; the browser only shows it.</span>
+        <span>Built in 24 hours at Midnight Moonshot, Bengaluru. The whole fight runs inside a SpacetimeDB module. The browser only shows it, so everyone in the room sees the same move at the same instant.</span>
         <a href="https://github.com/Aryan2193/redflow" target="_blank" rel="noreferrer" className="underline">
           Source on GitHub
         </a>

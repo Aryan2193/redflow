@@ -3,6 +3,7 @@ import { useReducer } from 'spacetimedb/react';
 import { reducers } from '../module_bindings';
 import type { Question, Room } from '../module_bindings/types';
 import { useAutosize } from '../lib/autosize';
+import { useMediaQuery } from '../lib/reveal';
 
 type Props = {
   room: Room;
@@ -11,6 +12,9 @@ type Props = {
   // Asking a new question is opened from the header; the composer itself only steps in.
   asking: boolean;
   onAskingChange: (v: boolean) => void;
+  // The context box can be opened from the header on a phone, or from the button beside the prompt on desktop.
+  contextOpen: boolean;
+  onContextOpenChange: (v: boolean) => void;
   onSent: () => void;
 };
 
@@ -26,8 +30,10 @@ export default function Composer(p: Props) {
   useAutosize(taRef, text, 200);
 
   // Standing context for the whole room, written in a bigger box.
-  const [ctxOpen, setCtxOpen] = useState(false);
+  const ctxOpen = p.contextOpen;
+  const setCtxOpen = p.onContextOpenChange;
   const [ctxText, setCtxText] = useState('');
+  const wide = useMediaQuery('(min-width: 768px)');
   const [ctxBusy, setCtxBusy] = useState(false);
   const ctxRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -82,7 +88,17 @@ export default function Composer(p: Props) {
     }
   }
 
-  const placeholder = asking ? (q ? 'Ask the room a new question.' : 'Ask one question. A decision, a plan, a claim to stress-test.') : busy ? 'Step in. A fact, a constraint, a correction. The models read it on their next turn.' : 'Step in with a note for the next round.';
+  const placeholder = !wide
+    ? asking
+      ? 'Ask a new question'
+      : 'Step in with a fact or a correction'
+    : asking
+      ? q
+        ? 'Ask the room a new question.'
+        : 'Ask one question. A decision, a plan, a claim to stress-test.'
+      : busy
+        ? 'Step in. A fact, a constraint, a correction. The models read it on their next turn.'
+        : 'Step in with a note for the next round.';
 
   return (
     <form onSubmit={send} className="shrink-0 border-t border-line bg-paper px-4 pb-[max(env(safe-area-inset-bottom),10px)] pt-2.5 sm:px-8">
@@ -116,14 +132,14 @@ export default function Composer(p: Props) {
         <div className="flex items-end gap-2">
           <button
             type="button"
-            onClick={() => setCtxOpen(v => !v)}
-            className={`mb-0.5 shrink-0 rounded-2xl border px-3 py-2.5 text-[13px] font-semibold ${ctxOpen ? 'border-ink bg-ink text-paper' : 'border-line bg-sheet text-ink-2 hover:border-ink'}`}
+            onClick={() => setCtxOpen(!ctxOpen)}
+            className={`mb-0.5 hidden shrink-0 rounded-2xl border px-3 py-2.5 text-[13px] font-semibold md:inline-flex ${ctxOpen ? 'border-ink bg-ink text-paper' : 'border-line bg-sheet text-ink-2 hover:border-ink'}`}
             title="Give every model background it should know for this whole room"
           >
             Add context
           </button>
-          <div className={`flex min-w-0 flex-1 items-end gap-2 rounded-2xl border bg-sheet px-3 py-2 focus-within:border-ink ${asking && q ? 'border-red' : 'border-line'}`}>
-            {asking && q && <span className="mb-1.5 shrink-0 rounded-full bg-red-soft px-2 py-0.5 text-[11px] font-semibold text-red">New question</span>}
+          <div className={`flex min-w-0 flex-1 items-end gap-2 rounded-2xl border bg-sheet px-3 py-1.5 focus-within:border-ink md:py-2 ${asking && q ? 'border-red' : 'border-line'}`}>
+            {asking && q && <span className="mb-1.5 hidden shrink-0 rounded-full bg-red-soft px-2 py-0.5 text-[11px] font-semibold text-red md:inline">New question</span>}
             <textarea
               ref={taRef}
               value={text}
@@ -146,8 +162,8 @@ export default function Composer(p: Props) {
                 Cancel
               </button>
             )}
-            <button type="submit" disabled={sending || !text.trim()} className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-paper disabled:opacity-40 ${asking ? 'bg-red' : 'bg-ink'}`}>
-              {asking ? 'Ask' : 'Step in'}
+            <button type="submit" disabled={sending || !text.trim()} className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] font-semibold text-paper disabled:opacity-40 ${asking ? 'bg-red' : 'bg-ink'}`}>
+              {asking ? 'Ask' : wide ? 'Step in' : 'Send'}
             </button>
           </div>
         </div>
