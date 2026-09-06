@@ -118,12 +118,6 @@ export default function Home() {
         <h1 className="font-display mt-2 text-[2.4rem] leading-[1.06] tracking-tight sm:text-[3.4rem]" style={{ textWrap: 'balance' }}>
           One AI gives you an answer. Four fighting over it give you a decision.
         </h1>
-        <p className="mt-4 max-w-[62ch] text-[17px] leading-relaxed text-ink-2">
-          Ask once. Claude writes the answer. Perplexity and GPT attack it line by line. The disputed facts get checked on the live web. Gemini, who took no side, rules on every fix. Your team watches it all happen and interrupts the moment it knows better.
-        </p>
-        <p className="mt-3 max-w-[62ch] text-[15px] leading-relaxed text-ink-2">
-          About three minutes later you hold a decision with the answer on top, the open risks still visible, and every changed line traced to the objection, the source, or the teammate who changed it.
-        </p>
       </header>
 
       <form onSubmit={onOpen} className="mt-8 rounded-2xl border border-line bg-sheet p-4 sm:p-5">
