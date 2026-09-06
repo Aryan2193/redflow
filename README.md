@@ -1,53 +1,74 @@
 # Redflow
 
-Several AI models argue over your team's question. Your team argues back. Live.
+**Four AI models fight over your question. Your team steps in. Live.**
 
-Built in 24 hours at Midnight Moonshot (SpacetimeDB, Bengaluru, 5 to 6 September 2026) by Aryan Agarwal and Shreya, with Claude as the builder. Full scope and rationale in [SCOPE.md](SCOPE.md), running build log in [NOTES.md](NOTES.md).
+Live: **https://aryan2193.github.io/redflow/** · Watch a room: code **42YU** · Built in 24 hours at Midnight Moonshot (SpacetimeDB, Bengaluru, 5 to 6 Sep 2026), Agents track.
 
-## What it does
+Statement we built against: *"Agents have never had to share a world."* In Redflow, four models from four labs and any number of humans act on one live room. The models have to handle each other's edits, and the humans' interruptions, without a restart.
 
-A team opens a room with a two-line brief and asks one question. Then, inside the SpacetimeDB module:
+## What happens when you ask
 
-1. **Blind drafts.** Three models from three different labs (Gemini Flash Lite, gpt-oss-120b, Llama 4 Maverick) answer independently. None sees the others.
-2. **The room asks the team.** The chair (Claude Sonnet 4.6) reads the drafts, assembles version one of the answer, and posts up to three questions only the team can answer.
-3. **Anonymous critique.** Each council model attacks the other drafts and the current answer. Drafts are labelled A, B, C and shuffled, so nobody knows who wrote what. Every attack lands in the objection ledger.
-4. **Grounding.** Checkable claims go to the web through one grounded call. Verdicts come back with citations.
-5. **Synthesis under obligation.** The chair rebuilds the answer one edit at a time. Every edit must cite a cause: an objection, a source, or a team note. The module refuses edits that cite nothing.
-6. **Verification.** Each critic reviews the objections it raised. It may withdraw only with a reason. The chair may overrule only with a reason.
-7. **Settle.** An empty ledger settles the question. If nobody objected at all, one model is assigned to dissent first. Objections still standing at the round cap become visible unresolved risks.
+1. **First answer.** Claude writes the best full answer it can, alone. Perplexity and GPT-5.2 write their own, blind, so nobody anchors on anyone.
+2. **Objections.** Each challenger quotes the exact claim it disputes, says why, and proposes a fix. Objections that would not change what the team does are not allowed.
+3. **Fact check.** Every checkable claim is searched. Each comes back confirmed or disproved, with the page that owns the fact, and a second search for anything unclear.
+4. **Revision.** Claude changes only what it can justify. Every edit must cite an objection, a source, or a teammate's note by name. Uncaused edits are refused by the database, not by a prompt.
+5. **Ruling.** Gemini, which neither wrote the answer nor attacked it, accepts or rejects each fix. What survives is the decision. Anything still disputed stays on the page as an open risk.
 
-Humans type at any time. Notes queue and are read as a batch at the start of the next agent turn, and the paragraphs they change carry the author's name. Wrap up interrupts. Go deeper runs another round.
+Humans type at any time. A note is read on the models' next move; if a note lands after the last revision, the room takes one more pass before deciding. "Add context" gives every model standing facts for the whole room. A bout takes two to three minutes and costs about 25 US cents in model calls.
 
-The answer is a living document: numbered paragraphs, each with a status (Verified, Agreed, Contested, Unresolved) and a why-trail. Every version is kept, so the room shows word-level diffs and a before-and-after against a single model's first draft.
+Everything the agents do is visible as it happens: what they read, what they searched, which pages they opened, what they wrote, in a live feed with the decision in the spotlight and the humans' chat beside it.
 
-## Where the logic lives
+## Why it beats asking one model
 
-Everything real-time is in one SpacetimeDB module, [`server/spacetimedb/src/index.ts`](server/spacetimedb/src/index.ts):
+- **Different labs, not one model in four hats.** Model diversity is the one intervention that reliably improves multi-agent debate. Same model with different prompts agrees with itself.
+- **Facts are checked, not asserted.** Claims go to the web and come back with sources.
+- **A structure that forces resolution.** Blind drafts, objections with fixes, edits that must cite a cause, a referee who owes nobody anything. Debate alone makes models converge; the rules are what make the answer better.
 
-- **Tables** are the world: `room`, `member`, `note`, `question`, `draft`, `team_question`, `objection`, `evidence`, `paragraph`, `answer_version`, `agent_status`, plus private `config`, `provider`, `email_request`, and the schedule tables.
-- **Reducers** are everything humans do: `createRoom`, `joinRoom`, `postNote`, `ask`, `wrapUp`, `goDeeper`, `requestVerdictEmail`, and owner-only admin reducers.
-- **`runStep`** is one scheduled procedure dispatched by step name (`draft`, `moderate`, `critique`, `dissent`, `ground`, `synthesize`, `verify`, `finalize`, `email`). It makes the model and search calls over HTTP outside any transaction, then writes results in one short transaction. Every write re-checks that its round is still current; stale results are dropped.
-- **`watchdogTick`** is a scheduled reducer that restarts any step that stalls and wraps up any question stuck too long.
-- The rules the product claims are enforced in code, not requested in prompts: anonymized shuffled critique (`stepCritique`), refused uncaused edits and one edit per paragraph per pass (`stepSynthesize`), withdrawal and overrule only with a reason (`stepVerify`, `stepSynthesize`), the assigned dissenter (`afterFanInCheck`).
+## How it is built
 
-The client, [`client/`](client/), is a Vite React app that renders subscriptions with `spacetimedb/react` hooks and calls reducers. It holds no logic about the deliberation.
+Everything real-time lives in one SpacetimeDB module (`server/spacetimedb/src/index.ts`) published to Maincloud as the database `redflow`.
 
-## Facts learned the hard way
+- **Tables** hold rooms, members, questions, drafts, paragraphs (every version kept), objections, evidence, versions, notes, agent status and agent events.
+- **Reducers** handle the humans: open a room, join, ask, step in with a note, add context, wrap up, go deeper.
+- **Scheduled procedures** run the bout itself: each step is one model call over HTTP (OpenRouter) whose result is written inside a short transaction. A state machine (drafting, critiquing, grounding, synthesizing, verifying, settled) decides who acts next. A watchdog restarts a stalled step and wraps up anything that runs too long.
+- **The client** (Vite, React 19, Tailwind v4, `spacetimedb/react`) only subscribes to tables and calls reducers. There is no other server. Open two tabs, or two phones, and both see every move the moment it lands.
+- **Login** is SpacetimeAuth, SpacetimeDB's own hosted OIDC, with magic links. Guests join with just a name.
 
-- Procedures run one at a time on Maincloud. Timeouts are tight per step so a slow model cannot stall every room.
-- Thinking models spend the token budget on hidden reasoning and truncate the JSON. Reasoning effort is set low where supported and headroom is added.
-- After any schema change, regenerate the client bindings or the client's binary reader throws.
+Models: Claude Sonnet 5 (lead), Perplexity Sonar Pro (challenger and fact checker), GPT-5.2 (challenger), Gemini 3.8 Flash (referee), all through one OpenRouter key.
 
-## Run it
+## Run it yourself
+
+Prerequisites: Node 20+, the [SpacetimeDB CLI](https://spacetimedb.com/install), an OpenRouter key.
 
 ```bash
-# module
-cd server && spacetime start            # local server
-spacetime publish -s local redflow      # then set the provider key with the owner-only reducer
-cd spacetimedb && spacetime generate --lang typescript --out-dir ../../client/src/module_bindings
+# Server: build and publish the module (local server or Maincloud)
+cd server/spacetimedb
+spacetime build
+spacetime publish -s local redflow --yes          # or: -s maincloud
+spacetime call -s local redflow set_provider_key '"sk-or-..."'
+spacetime generate --lang typescript --out-dir ../../client/src/module_bindings
 
-# client
-cd client && npm install && npm run dev
+# Client
+cd ../../client
+npm install
+npm run dev                                       # local server on ws://127.0.0.1:3000
+npm run dev -- --mode production                  # against Maincloud (see .env.production)
 ```
 
-Production connects to Maincloud (`client/.env.production`). Model provider is OpenRouter, one key for all models and web search. Email goes through Resend or a webhook relay, set with `setEmailProvider`.
+Schema changes must be additive once users are in. Regenerate the bindings after any change to the module.
+
+## Repository map
+
+- `server/spacetimedb/` the module: schema, reducers, the bout pipeline, prompts, email.
+- `client/` the web client. `src/components/ControlRoom.tsx` is the room; `src/components/Cards.tsx` renders every kind of move; `src/components/Verdict.tsx` is the decision.
+- `docs/HANDOFF.md` full frontend and backend handoff. `docs/DEMO-SCRIPT.md` the demo. `docs/LAUNCH-POST.md` the post.
+- `SCOPE.md` the scope we locked at the start. `NOTES.md` the running build log, hour by hour. `PRODUCT.md` and `DESIGN.md` the design context.
+- `tools/apps-script-relay.gs` an optional Gmail relay for verdict emails.
+
+## Team
+
+Aryan Agarwal (captain) and Shreya (go-to-market), with Claude Code as the builder. Bengaluru.
+
+## Licence
+
+MIT. See `LICENSE`.

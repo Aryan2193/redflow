@@ -1,6 +1,6 @@
 # Redflow, full handoff (frontend and backend)
 
-Paste this into any AI before working on Redflow. It covers what the product is, how the backend runs a bout, what the frontend renders, how to build and deploy, and what is still open. Repo: https://github.com/Aryan2193/redflow (public). Live: https://aryan2193.github.io/redflow/. Running log: NOTES.md. Design context: PRODUCT.md, DESIGN.md.
+Paste this into any AI before working on Redflow. Backend sections are current. The UI section (4.2) predates the final control-room layout; see README.md and `client/src/components/ControlRoom.tsx` for the shipped room.
 
 ## 1. Product
 

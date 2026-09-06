@@ -10,18 +10,18 @@ import { useAutosize } from '../lib/autosize';
 const DEMO_ROOM = ((import.meta.env.VITE_DEMO_ROOM as string | undefined) ?? '').toUpperCase();
 
 const CAST = [
-  { name: 'Claude', role: 'lead', does: 'writes the first answer and every revision', bg: 'bg-red', text: 'text-red' },
-  { name: 'Perplexity', role: 'challenger', does: 'attacks it and checks the facts on the web', bg: 'bg-teal', text: 'text-teal' },
-  { name: 'GPT-5.2', role: 'challenger', does: 'attacks it from a second angle', bg: 'bg-slate', text: 'text-slate' },
-  { name: 'Gemini', role: 'referee', does: 'rules on every fix, took no side', bg: 'bg-warn', text: 'text-warn' },
+  { name: 'Claude', role: 'lead', does: 'Writes the answer, then defends it. Changes a line only with a reason it can point to.', bg: 'bg-red', text: 'text-red' },
+  { name: 'Perplexity', role: 'challenger', does: 'Attacks the answer, then checks every disputed fact against the page that owns it.', bg: 'bg-teal', text: 'text-teal' },
+  { name: 'GPT-5.2', role: 'challenger', does: 'Attacks from a second angle. When nobody objects, it is made to argue the other side.', bg: 'bg-slate', text: 'text-slate' },
+  { name: 'Gemini', role: 'referee', does: 'Took no side. Accepts or rejects each fix. What it lets through is the decision.', bg: 'bg-warn', text: 'text-warn' },
 ];
 
 const ROUNDS = [
-  ['First answer', 'Claude answers alone. The challengers draft their own, blind.'],
-  ['Objections', 'Each challenger quotes the exact claim it disputes and says what would fix it.'],
-  ['Fact check', 'Checkable claims are searched. Each stands or falls, with the source.'],
-  ['Revision', 'Claude changes only what it can justify: an objection, a source, or your note.'],
-  ['Ruling', 'Gemini accepts or rejects each fix. What survives is the decision.'],
+  ['First answer', 'Claude answers in full, alone. The challengers write their own, blind, so nobody copies anybody.'],
+  ['Objections', 'Each challenger quotes the exact line it disputes, says why it is wrong, and gives the fix.'],
+  ['Fact check', 'Every checkable claim is searched. It comes back confirmed or disproved, with the source.'],
+  ['Revision', 'Claude rewrites what fell and defends what stood. Every edit names its cause: an objection, a source, or you.'],
+  ['Ruling', 'Gemini accepts or rejects each fix. Whatever is still disputed stays on the page as an open risk.'],
 ];
 
 export default function Home() {
@@ -101,8 +101,11 @@ export default function Home() {
         <h1 className="font-display text-[2.4rem] leading-[1.06] tracking-tight sm:text-[3.4rem]" style={{ textWrap: 'balance' }}>
           Four AI models fight over your question. Your team steps in. Live.
         </h1>
-        <p className="mt-4 max-w-[60ch] text-[17px] leading-relaxed text-ink-2">
-          Ask once. Claude answers, Perplexity and GPT-5.2 attack the answer, the facts get checked on the web, and Gemini rules on every fix. Type at any moment and the models read it on their next move. Two to three minutes to a decision you can defend.
+        <p className="mt-4 max-w-[62ch] text-[17px] leading-relaxed text-ink-2">
+          One model's answer is a first draft nobody checked. Redflow makes four models from four labs earn it: one writes, two attack, the facts get checked on the web, and a referee rules on every fix. You watch it happen and interrupt whenever you know better.
+        </p>
+        <p className="mt-3 max-w-[62ch] text-[15px] leading-relaxed text-ink-2">
+          Three minutes later you have a decision that survived a fight, with every changed line traced to the objection, the source, or the teammate that changed it.
         </p>
       </header>
 
@@ -120,7 +123,7 @@ export default function Home() {
               }
             }}
             rows={2}
-            placeholder="A decision, a plan, a claim you want stress-tested. One or two sentences, with the numbers you have."
+            placeholder="A decision you have to make, a plan to pressure-test, or a claim you suspect. Include the numbers you have."
             className="w-full resize-none rounded-xl border border-line bg-paper px-3 py-3 text-lg leading-snug outline-none focus:border-ink"
             maxLength={2000}
           />
@@ -141,7 +144,7 @@ export default function Home() {
             {busy === 'open' ? 'Opening the room' : 'Ask the room'}
           </button>
         </div>
-        <p className="mt-2 text-xs text-muted">A room opens around your question with a four-letter code. Share it and your team is in with just a name. No account, no password.</p>
+        <p className="mt-2 text-xs text-muted">Your question opens a room with a four-letter code. Anyone with the code is in with just a name, on any phone, and everything they type reaches the models on their next move.</p>
       </form>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
@@ -163,9 +166,9 @@ export default function Home() {
         </form>
         {DEMO_ROOM && (
           <button onClick={() => navigate(`/r/${DEMO_ROOM}`)} className="flex flex-col items-start justify-center rounded-2xl border border-line-2 bg-sheet px-4 py-3 text-left hover:border-ink sm:w-64">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Watch a live room first</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Watch one first</span>
             <span className="mt-1 text-sm text-ink-2">
-              The room we are running today, code <span className="font-mono font-semibold tracking-[0.15em] text-ink">{DEMO_ROOM}</span>. Read the bouts, or start one.
+              Our public room, code <span className="font-mono font-semibold tracking-[0.15em] text-ink">{DEMO_ROOM}</span>. Read the bouts that already ran, or ask it something.
             </span>
           </button>
         )}
@@ -205,23 +208,41 @@ export default function Home() {
         </ol>
       </section>
 
+      <section className="mt-12">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">While it runs, you are in the room too</h2>
+        <ul className="mt-3 grid gap-4 text-[14.5px] leading-relaxed text-ink-2 sm:grid-cols-3">
+          <li>
+            <div className="mb-1 font-semibold text-ink">Step in</div>
+            Know something the models do not? Type it. It is read on the very next move, and the line it changes carries your name.
+          </li>
+          <li>
+            <div className="mb-1 font-semibold text-ink">Add context once</div>
+            Paste the background, the numbers, the constraints. Every model reads it on every move, for every question in the room.
+          </li>
+          <li>
+            <div className="mb-1 font-semibold text-ink">Watch every move</div>
+            Each search, each page opened, each objection and ruling shows up the second it happens. Nothing is hidden behind a spinner.
+          </li>
+        </ul>
+      </section>
+
       <section className="mt-12 grid gap-5 text-[14.5px] leading-relaxed text-ink-2 sm:grid-cols-3">
         <div>
           <div className="mb-1 font-semibold text-ink">Four labs, not one model in four hats</div>
-          Models from different labs disagree in useful ways. Same model, different prompts, agrees with itself.
+          Models from different labs disagree in useful ways. One model with four prompts agrees with itself, and is wrong together.
         </div>
         <div>
-          <div className="mb-1 font-semibold text-ink">Facts are checked, not asserted</div>
-          Every checkable claim goes to the web and comes back confirmed or disproved, with the page that owns the fact.
+          <div className="mb-1 font-semibold text-ink">Checked, not asserted</div>
+          Every checkable claim goes to the web and comes back confirmed or disproved, with the page that owns the fact linked.
         </div>
         <div>
           <div className="mb-1 font-semibold text-ink">Nothing changes without a reason</div>
-          Every edit to the answer cites an objection, a source, or a teammate by name. Uncaused edits are refused. Anything still disputed stays on the page as an open risk.
+          Every edit cites an objection, a source, or a teammate. Edits with no cause are refused by the system. What is still disputed stays visible as an open risk instead of quietly disappearing.
         </div>
       </section>
 
       <footer className="mt-16 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-        <span>Built in 24 hours at Midnight Moonshot, Bengaluru, on SpacetimeDB.</span>
+        <span>Built in 24 hours at Midnight Moonshot, Bengaluru. The whole debate runs inside a SpacetimeDB module; the browser only shows it.</span>
         <a href="https://github.com/Aryan2193/redflow" target="_blank" rel="noreferrer" className="underline">
           Source on GitHub
         </a>
