@@ -5,29 +5,14 @@ import type { Question } from '../module_bindings/types';
 import { idHex, rememberName, savedName, toDate } from '../lib/stdb';
 import { nameFromProfile } from '../lib/auth';
 import SignIn, { useOptionalAuth } from '../components/AuthBits';
-import Arena from '../components/Arena';
 import ControlRoom from '../components/ControlRoom';
 import Composer from '../components/Composer';
-
-// Two layouts share every component underneath. The default comes from the build; the switch in the header
-// overrides it on this device.
-type Layout = 'arena' | 'control';
-const LAYOUT_KEY = 'redflow.layout';
-const DEFAULT_LAYOUT: Layout = ((import.meta.env.VITE_ROOM_LAYOUT as string | undefined) ?? 'control') === 'arena' ? 'arena' : 'control';
-function savedLayout(): Layout {
-  try {
-    const v = localStorage.getItem(LAYOUT_KEY);
-    return v === 'arena' || v === 'control' ? v : DEFAULT_LAYOUT;
-  } catch {
-    return DEFAULT_LAYOUT;
-  }
-}
-import RoundBar from '../components/RoundBar';
 import { navigate } from '../App';
 
 export default function Room({ code }: { code: string }) {
   const { identity, isActive } = useSpacetimeDB();
   const joinRoom = useReducer(reducers.joinRoom);
+  const wrapUp = useReducer(reducers.wrapUp);
   const auth = useOptionalAuth();
 
   const [rooms, roomsReady] = useTable(tables.room.where(r => r.code.eq(code)));
@@ -76,17 +61,7 @@ export default function Room({ code }: { code: string }) {
 
   const [copied, setCopied] = useState(false);
   const [explain, setExplain] = useState(false);
-  const [layout, setLayout] = useState<Layout>(savedLayout);
   const [asking, setAsking] = useState(false);
-  const wrapUp = useReducer(reducers.wrapUp);
-  const pickLayout = (l: Layout) => {
-    setLayout(l);
-    try {
-      localStorage.setItem(LAYOUT_KEY, l);
-    } catch {
-      // fine
-    }
-  };
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 5000);
@@ -147,16 +122,15 @@ export default function Room({ code }: { code: string }) {
     );
   }
 
-  const online = members.filter(m => m.online);
   const queued = question ? notes.filter(n => n.questionId === question.id && n.consumedStep === '' && n.teamQuestionId === 0n).length : 0;
-  const openRisks = objections.filter(o => o.status === 'unresolved').length;
   const justJoined = now - toDate(myMember.joinedAt).getTime() < 120_000;
   const lead = table[0]?.label ?? 'The lead';
+  const busy = !!latest && latest.state !== 'settled' && latest.state !== 'failed';
 
   return (
     <div className="flex h-dvh flex-col">
       <header className="shrink-0 border-b border-line bg-paper">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 sm:px-5">
+        <div className="mx-auto flex max-w-[1480px] flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 sm:px-8">
           <button onClick={() => navigate('/')} className="flex shrink-0 items-center gap-2" aria-label="Redflow home">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-red" aria-hidden />
             <span className="text-sm font-semibold">Redflow</span>
@@ -180,10 +154,7 @@ export default function Room({ code }: { code: string }) {
               ))}
             </select>
           )}
-          <span className="hidden whitespace-nowrap text-xs text-muted sm:inline">
-            {online.length} here{online.length !== members.length ? `, ${members.length} joined` : ''}
-          </span>
-          {latest && latest.state !== 'settled' && latest.state !== 'failed' ? (
+          {busy && latest ? (
             <button onClick={() => wrapUp({ questionId: latest.id }).catch(() => {})} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink-2 hover:border-ink" title="Stop the bout and decide with what stands">
               Wrap it up
             </button>
@@ -192,13 +163,6 @@ export default function Room({ code }: { code: string }) {
               New question
             </button>
           )}
-          <span className="hidden shrink-0 items-center rounded-full border border-line bg-sheet p-0.5 text-[11px] font-semibold sm:inline-flex" role="tablist" aria-label="Layout">
-            {(['control', 'arena'] as Layout[]).map(l => (
-              <button key={l} role="tab" aria-selected={layout === l} onClick={() => pickLayout(l)} className={`rounded-full px-2 py-0.5 ${layout === l ? 'bg-ink text-paper' : 'text-ink-2'}`}>
-                {l === 'control' ? 'Control room' : 'Arena'}
-              </button>
-            ))}
-          </span>
           <button onClick={() => setExplain(v => !v)} className="shrink-0 whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-xs text-ink-2" aria-label="How this works">
             {explain ? 'Close' : <><span className="sm:hidden">How</span><span className="hidden sm:inline">How this works</span></>}
           </button>
@@ -220,20 +184,15 @@ export default function Room({ code }: { code: string }) {
         </div>
         {explain && (
           <div className="border-t border-line-2 bg-sheet">
-            <div className="mx-auto max-w-[1400px] px-3 py-3 text-sm text-ink-2 sm:px-5">
+            <div className="mx-auto max-w-[1480px] px-4 py-3 text-sm text-ink-2 sm:px-8">
               <ol className="list-decimal space-y-1 pl-5">
                 <li>You ask one question. Round one: {lead} writes the best full answer it can, alone. {table.slice(1).map(s => s.label).join(' and ')} write their own blind.</li>
                 <li>Round two: the challengers attack {lead}'s answer on substance. Every hit quotes the exact claim and says what would fix it.</li>
                 <li>Round three: disputed facts are checked on the web. A claim stands or is refuted, with the source.</li>
-                <li>Round four: {lead} comes back. Every change cites a hit, a source, or your message, or the system refuses it. Round five: the fixes are ruled on. What survives is the decision.</li>
+                <li>Round four: {lead} comes back. Every change cites a hit, a source, or your message, or the system refuses it. Round five: Gemini, who took no part, rules on the fixes. What survives is the decision.</li>
               </ol>
               <p className="mt-2">Type at any time. Your message is read on the next turn, and any section it changes carries your name.</p>
             </div>
-          </div>
-        )}
-        {question && layout === 'arena' && (
-          <div className="border-t border-line-2 py-1.5">
-            <RoundBar question={question} openRisks={openRisks} />
           </div>
         )}
       </header>
@@ -245,40 +204,22 @@ export default function Room({ code }: { code: string }) {
       )}
 
       {question ? (
-        layout === 'control' ? (
-          <ControlRoom
-            room={room}
-            question={question}
-            members={members}
-            notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
-            drafts={drafts}
-            objections={objections}
-            evidence={evidence}
-            paragraphs={paragraphs}
-            versions={versions}
-            statuses={statuses}
-            events={events}
-            slots={slots}
-            now={now}
-            myName={myMember.name}
-          />
-        ) : (
-          <Arena
-            room={room}
-            question={question}
-            notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
-            drafts={drafts}
-            objections={objections}
-            evidence={evidence}
-            paragraphs={paragraphs}
-            versions={versions}
-            statuses={statuses}
-            events={events}
-            slots={slots}
-            now={now}
-            myName={myMember.name}
-          />
-        )
+        <ControlRoom
+          room={room}
+          question={question}
+          members={members}
+          notes={notes.filter(n => n.questionId === question.id || n.questionId === 0n)}
+          drafts={drafts}
+          objections={objections}
+          evidence={evidence}
+          paragraphs={paragraphs}
+          versions={versions}
+          statuses={statuses}
+          events={events}
+          slots={slots}
+          now={now}
+          myName={myMember.name}
+        />
       ) : (
         <div className="flex flex-1 items-center justify-center px-5 text-center">
           <div className="max-w-md">
