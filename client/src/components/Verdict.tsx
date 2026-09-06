@@ -98,6 +98,8 @@ export default function Verdict(p: Props) {
     if (stood) parts.push(`${plural(stood, 'objection')} fell to evidence.`);
     if (open.length) parts.push(`${plural(open.length, 'hit')} still open.`);
     if (p.evidence.length) parts.push(`${plural(p.evidence.length, 'fact')} checked: ${supported.length} stood${refuted ? `, ${refuted} refuted` : ''}.`);
+    const ref = p.slots.find(s => s.slot === 'referee' && s.enabled);
+    if (ref && fixed + open.length > 0) parts.push(`${ref.label} refereed.`);
     return parts.join(' ');
   })();
 

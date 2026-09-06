@@ -133,3 +133,8 @@
 - Aryan's account action: Maincloud dashboard, profile, module redflow, SpacetimeAuth, Use SpacetimeAuth; in Clients add redirect URIs https://aryan2193.github.io/redflow/callback, http://localhost:4173/callback, http://localhost:5173/callback and post-logout https://aryan2193.github.io/redflow/; Customization keeps Magic link on; send the client ID.
 - Email-at-the-door fields removed from Home and the join gate (the welcome-email reducer stays server-side, unused).
 - 07:50 SpacetimeAuth live with client_034JpEPIAlVD0JbsuP12Kn. Verified end to end on :4173: Sign in with email -> auth.spacetimedb.com login page (Send magic link / Anonymous login) -> /callback -> app signed in, SpacetimeDB connection active with the OIDC token (Maincloud accepts SpacetimeAuth tokens for the module). Magic-link email is sent by SpacetimeAuth itself. Public build redeployed with the client id.
+
+## 06:15 (Sun) fourth agent: Gemini as the referee
+- Gap filled: Perplexity was critic, fact checker and verifier at once, so it ruled on fixes to its own hits. New slot `referee` = google/gemini-3.8-flash (fourth lab, reasoning low, prompt JSON with json_object) rules on every addressed objection. Fallback chain if the referee is missing or disabled: council_b, then council_c. Registered on local and Maincloud with set_model_slot; the seed list carries it for fresh databases.
+- Client: amber tone, ring header "Gemini referees", referee presence block in the ring, ruling cards attributed to the referee, verdict line "Gemini refereed."
+- Real clock check: it was 06:04 IST when this started, not the 07:55 I had been estimating. Freeze 08:30 stands.

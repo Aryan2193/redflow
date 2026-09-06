@@ -29,11 +29,11 @@ export const STATUS_HELP: Record<string, string> = {
 };
 
 // Who is talking. Each model has one color for the whole room; humans are ink.
-export type Tone = 'red' | 'teal' | 'slate' | 'ink';
+export type Tone = 'red' | 'teal' | 'slate' | 'amber' | 'ink';
 export type Speaker = { key: string; name: string; role: string; tone: Tone; human: boolean };
 
-const SLOT_TONE: Record<string, Tone> = { council_a: 'red', chair: 'red', council_b: 'teal', checker: 'teal', council_c: 'slate' };
-const SLOT_ROLE: Record<string, string> = { council_a: 'lead', chair: 'lead', council_b: 'critic', council_c: 'critic', checker: 'fact check' };
+const SLOT_TONE: Record<string, Tone> = { council_a: 'red', chair: 'red', council_b: 'teal', checker: 'teal', council_c: 'slate', referee: 'amber' };
+const SLOT_ROLE: Record<string, string> = { council_a: 'lead', chair: 'lead', council_b: 'critic', council_c: 'critic', checker: 'fact check', referee: 'referee' };
 
 export function speakerFor(slot: string, slots: readonly ModelSlot[]): Speaker {
   const key = slot === 'chair' ? 'council_a' : slot;
@@ -45,9 +45,9 @@ export function humanSpeaker(name: string): Speaker {
   return { key: 'human:' + name, name, role: '', tone: 'ink', human: true };
 }
 
-export const TONE_TEXT: Record<Tone, string> = { red: 'text-red', teal: 'text-teal', slate: 'text-slate', ink: 'text-ink' };
-export const TONE_BG: Record<Tone, string> = { red: 'bg-red', teal: 'bg-teal', slate: 'bg-slate', ink: 'bg-ink' };
-export const TONE_BUB: Record<Tone, string> = { red: 'bub-red', teal: 'bub-teal', slate: 'bub-slate', ink: 'bub-human' };
+export const TONE_TEXT: Record<Tone, string> = { red: 'text-red', teal: 'text-teal', slate: 'text-slate', amber: 'text-warn', ink: 'text-ink' };
+export const TONE_BG: Record<Tone, string> = { red: 'bg-red', teal: 'bg-teal', slate: 'bg-slate', amber: 'bg-warn', ink: 'bg-ink' };
+export const TONE_BUB: Record<Tone, string> = { red: 'bub-red', teal: 'bub-teal', slate: 'bub-slate', amber: 'bub-amber', ink: 'bub-human' };
 
 // Legacy dot colors used by the header chips.
 export function slotColor(slot: string): string {

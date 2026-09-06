@@ -51,8 +51,14 @@ export const ACTIVE_STATES = new Set(['reading', 'drafting', 'critiquing', 'chec
 
 export function cornerOf(slot: string): Corner {
   if (slot === 'council_a' || slot === 'chair') return 'left';
-  if (slot === 'checker') return 'center';
+  if (slot === 'checker' || slot === 'referee') return 'center';
   return 'right';
+}
+
+// Who rules on the fixes: the referee when there is one, else a critic.
+export function verifierSlot(slots: readonly ModelSlot[]): string {
+  for (const s of ['referee', 'council_b', 'council_c']) if (slots.find(x => x.slot === s && x.enabled)) return s;
+  return 'council_b';
 }
 
 export function unquote(s: string): string {
@@ -151,11 +157,11 @@ export function buildBout(p: BoutInput): BoutItem[] {
 
   // The verifier's ruling lives on the objections it judged. One card per round.
   const judged = p.objections.filter(o => /\| (withdrawn|held): /.test(o.resolution));
-  const verifierSlot = p.slots.find(s => s.slot === 'council_b' && s.enabled) ? 'council_b' : 'council_c';
+  const ref = verifierSlot(p.slots);
   for (const r of [...new Set(judged.map(o => o.round))]) {
     const group = judged.filter(o => o.round === r);
     const when = Math.max(...group.map(o => at(o.updatedAt)));
-    out.push({ kind: 'ruling', key: 'vf' + r, at: when, corner: 'center', stage: 'ruling', round: r, speaker: speakerFor(verifierSlot, p.slots), group });
+    out.push({ kind: 'ruling', key: 'vf' + r, at: when, corner: 'center', stage: 'ruling', round: r, speaker: speakerFor(ref, p.slots), group });
   }
 
   // Who is working right now is shown by each model's presence block under its cards, not as a card.

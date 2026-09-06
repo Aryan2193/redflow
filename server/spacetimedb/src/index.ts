@@ -332,8 +332,14 @@ type Tx = { db: Db; timestamp: any; sender: any };
 const LEAD = 'council_a';
 const CRITICS = ['council_b', 'council_c'] as const;
 const COUNCIL = [LEAD, ...CRITICS] as const;
-const VERIFIER = 'council_b';
+// The referee is a fourth model from a fourth lab that neither wrote the answer nor attacked it. It rules on the
+// fixes, so no critic ever judges its own hits. Falls back to a critic if the referee slot is missing or disabled.
+const REFEREE = 'referee';
 const DISSENTER = 'council_c';
+function verifierSlot(slots: readonly { slot: string; enabled: boolean }[]): string {
+  for (const s of [REFEREE, 'council_b', 'council_c']) if (slots.find(x => x.slot === s && x.enabled)) return s;
+  return 'council_b';
+}
 const STEP_DELAY_MICROS = 150_000n;
 
 // ---------------------------------------------------------------------------------------------
@@ -358,6 +364,7 @@ export const init = spacetimedb.init(ctx => {
     ['council_c', 'openai/gpt-5.2', 'GPT-5.2', false, 'low', 'prompt'],
     ['checker', 'perplexity/sonar-pro', 'Perplexity', true, '', 'prompt'],
     ['chair', 'anthropic/claude-sonnet-5', 'Claude', false, '', 'prompt'],
+    ['referee', 'google/gemini-3.8-flash', 'Gemini', false, 'low', 'prompt'],
   ] as const;
   for (const [slot, model, label, useWeb, reasoning, jsonMode] of seed) {
     ctx.db.model_slot.insert({ slot, model, label, providerId: 1, useWeb, enabled: true, reasoning, jsonMode });
@@ -894,7 +901,7 @@ function callModel(
     provider: slotRow.slot === LEAD || slotRow.slot === 'chair' ? { require_parameters: !promptJson } : { require_parameters: !promptJson, sort: 'latency' },
   };
   if (!promptJson) body.response_format = { type: 'json_schema', json_schema: { name: 'redflow', strict: true, schema: jsonSchema } };
-  else if (/^(anthropic|openai)\//.test(slotRow.model)) body.response_format = { type: 'json_object' };
+  else if (/^(anthropic|openai|google)\//.test(slotRow.model)) body.response_format = { type: 'json_object' };
   const effort = (slotRow.reasoning || '').trim();
   // Claude thinks by default through OpenRouter, and its thinking tokens count against max_tokens. Left unbounded, a
   // hard revision can think past the cap and the answer arrives cut off. Give it an explicit budget sized to the task.
@@ -1847,7 +1854,7 @@ summary: one sentence for the team, in the voice of someone defending their work
     if (addressedRows.length === 0) {
       settleFromVerify(tx, q.id, load.slots);
     } else {
-      const verifier = load.slots.find((s: any) => s.slot === VERIFIER && s.enabled) ? VERIFIER : DISSENTER;
+      const verifier = verifierSlot(load.slots);
       scheduleStep(tx.db, tx.timestamp, q.id, qq.round, 'verify', verifier);
       setAgentStatus(tx.db, tx.timestamp, q.id, verifier, 'verifying', 'checking whether the fixes hold');
     }
@@ -1895,7 +1902,8 @@ Do not withdraw because the lead sounds confident. Do not hold over wording.`;
     ctx,
     slotRow,
     prov,
-    HOUSE(load.today) + '\n\nYou verify whether objections were actually fixed. Confidence is not evidence, style is not substance, and deleting a claim is not the same as fixing it.',
+    HOUSE(load.today) +
+      '\n\nYou are the referee. You did not write the answer and you did not attack it, so you owe nobody anything. You verify whether objections were actually fixed. Confidence is not evidence, style is not substance, and deleting a claim is not the same as fixing it.',
     user,
     schema,
     1200,
@@ -1993,7 +2001,7 @@ export const watchdogTick = spacetimedb.reducer({ timer: watchdog_schedule.rowTy
         restarted = 'synthesize';
         break;
       case 'verifying':
-        scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'verify', VERIFIER);
+        scheduleStep(ctx.db, ctx.timestamp, q.id, q.round, 'verify', verifierSlot(slots));
         restarted = 'verify';
         break;
     }

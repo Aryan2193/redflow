@@ -223,6 +223,10 @@ body {
   background: color-mix(in srgb, var(--color-slate) 6%, var(--color-sheet));
   border-color: color-mix(in srgb, var(--color-slate) 30%, var(--color-line));
 }
+.bub-amber {
+  background: color-mix(in srgb, var(--color-warn) 7%, var(--color-sheet));
+  border-color: color-mix(in srgb, var(--color-warn) 32%, var(--color-line));
+}
 .bub-human {
   background: var(--color-ink);
   border-color: var(--color-ink);

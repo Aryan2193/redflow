@@ -163,6 +163,7 @@ export default function Arena(p: Props) {
 
   const ctx: CardCtx = { paragraphs: p.paragraphs, objections: p.objections, evidence: p.evidence, notes: p.notes, slots: p.slots, now: p.now, leadName };
   const openRisks = p.objections.filter(o => o.status === 'unresolved').length;
+  const referee = p.slots.find(s => s.slot === 'referee' && s.enabled);
 
   const stand = (slot: string, side: 'left' | 'right', _size = 0, max = 3) => <Presence slot={slot} slots={p.slots} events={p.events} statuses={p.statuses} align={side} max={max} />;
 
@@ -213,7 +214,9 @@ export default function Arena(p: Props) {
       <div className="flex min-h-0 min-w-0 flex-col">
         <div className="flex items-baseline justify-between px-1 pb-1">
           <span className="font-fight text-[22px] leading-none tracking-wide text-ink">The ring</span>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">{settled ? (openRisks ? `decided, ${openRisks} open` : 'decided') : 'referee and ringside'}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+            {settled ? (openRisks ? `decided, ${openRisks} open` : 'decided') : referee ? <><span className="text-warn">{referee.label}</span> referees · ringside</> : 'referee and ringside'}
+          </span>
         </div>
         {question && question.kind === 'question' && (
           <div className="mb-2 shrink-0">
@@ -226,7 +229,12 @@ export default function Arena(p: Props) {
           isOpen={isOpen}
           toggle={toggle}
           tint="color-mix(in srgb, var(--color-ink) 3%, var(--color-paper))"
-          tail={p.events.some(e => e.slot === 'checker') || p.statuses.some(s => s.slot === 'checker' && ACTIVE_STATES.has(s.state)) ? <Presence slot="checker" slots={p.slots} events={p.events} statuses={p.statuses} /> : null}
+          tail={
+            <div className="space-y-1">
+              {(p.events.some(e => e.slot === 'checker') || p.statuses.some(s => s.slot === 'checker' && ACTIVE_STATES.has(s.state))) && <Presence slot="checker" slots={p.slots} events={p.events} statuses={p.statuses} max={2} />}
+              {referee && (p.events.some(e => e.slot === 'referee') || p.statuses.some(s => s.slot === 'referee') || !settled) && <Presence slot="referee" slots={p.slots} events={p.events} statuses={p.statuses} max={2} />}
+            </div>
+          }
           footer={verdict}
         />
       </div>
